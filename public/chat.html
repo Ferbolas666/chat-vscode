@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Corporativo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  :root {
+    --primary-blue: #1976D2;
+    --light-blue: #64B5F6;
+    --dark-blue: #0D47A1;
+    --chat-bubble: #BBDEFB;
+    --chat-background: #E3F2FD;
+    --accent-blue: #2196F3;
+  }
+  
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  body {
+    font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: linear-gradient(to bottom, var(--primary-blue), var(--dark-blue));
+    height: 100vh;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+  }
+  
+  .app-container {
+    width: 100%;
+    height: 100vh;
+    background-color: white;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  
+  /* Header fixo */
+  .app-header {
+    padding: 16px;
+    background-color: var(--primary-blue);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 10;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+  
+  .app-header .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: white;
+    color: var(--primary-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    margin-right: 12px;
+  }
+  
+  .app-title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  
+  /* Conteúdo principal com rolagem */
+  .app-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    background-color: #f8f9fa;
+  }
+  
+  /* Header do usuário logado */
+  .user-profile {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--primary-blue), var(--dark-blue));
+    border-radius: 12px;
+    margin-bottom: 20px;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  
+  .user-profile .avatar {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 24px;
+    color: var(--primary-blue);
+    margin-right: 15px;
+    border: 3px solid white;
+  }
+  
+  .user-info {
+    flex: 1;
+  }
+  
+  .user-name {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  
+  .user-role {
+    font-size: 14px;
+    opacity: 0.9;
+  }
+  
+  /* Botões de nível */
+  .level-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  
+  .level-btn {
+    padding: 16px;
+    background-color: white;
+    color: var(--primary-blue);
+    border: 2px solid var(--primary-blue);
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 100px;
+  }
+  
+  .level-btn:hover, .level-btn.active {
+    background-color: var(--primary-blue);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .level-btn i {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+  
+  /* Lista de contatos */
+  .contacts-list {
+    background-color: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  
+  .contact-item {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  
+  .contact-item:last-child {
+    border-bottom: none;
+  }
+  
+  .contact-item:hover {
+    background-color: #f5f5f5;
+  }
+  
+  .contact-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--light-blue), var(--primary-blue));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    margin-right: 15px;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  
+  .contact-info {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .contact-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .contact-status {
+    font-size: 13px;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  /* Área de chat (inicialmente oculta) */
+  .chat-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--chat-background);
+    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%231976d2' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E");
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .chat-container.active {
+    transform: translateX(0);
+  }
+  
+  .chat-header {
+    padding: 16px;
+    background-color: var(--primary-blue);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+  
+  .chat-header .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: white;
+    color: var(--primary-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    margin-right: 12px;
+  }
+  
+  .back-button {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: white;
+    cursor: pointer;
+    margin-right: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .chat-messages {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .message {
+    margin-bottom: 15px;
+    max-width: 85%;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .message-sent {
+    align-self: flex-end;
+  }
+  
+  .message-received {
+    align-self: flex-start;
+  }
+  
+  .message-bubble {
+    padding: 12px 16px;
+    border-radius: 8px;
+    position: relative;
+    word-break: break-word;
+  }
+  
+  .sent .message-bubble {
+    background-color: var(--chat-bubble);
+    border-top-right-radius: 2px;
+  }
+  
+  .received .message-bubble {
+    background-color: white;
+    border-top-left-radius: 2px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+  }
+  
+  .message-time {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    align-self: flex-end;
+  }
+  
+  .chat-input {
+    display: flex;
+    padding: 12px;
+    background-color: white;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid #e0e0e0;
+  }
+  
+  .chat-input input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 25px;
+    outline: none;
+    font-size: 15px;
+  }
+  
+  .chat-input input:focus {
+    border-color: var(--light-blue);
+  }
+  
+  .chat-input button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--primary-blue);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+  }
+  
+  .chat-input button:hover {
+    background-color: var(--dark-blue);
+  }
+  
+  /* Para desktop */
+  @media (min-width: 768px) {
+    .app-container {
+      width: 90%;
+      height: 90vh;
+      border-radius: 12px;
+      overflow: hidden;
+      flex-direction: row;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    
+    .app-header {
+      display: none;
+    }
+    
+    .app-content {
+      width: 35%;
+      border-right: 1px solid #e0e0e0;
+    }
+    
+    .chat-container {
+      position: static;
+      width: 65%;
+      transform: none;
+      display: flex;
+    }
+    
+    .back-button {
+      display: none;
+    }
+    
+    .level-buttons {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .level-btn {
+      min-height: 80px;
+    }
+    
+    .user-profile {
+      padding: 15px;
+    }
+    
+    .user-profile .avatar {
+      width: 60px;
+      height: 60px;
+      font-size: 20px;
+    }
+  }
+
+  /* Indicador de nível selecionado */
+  .selected-level {
+    text-align: center;
+    margin-bottom: 15px;
+    font-weight: 500;
+    color: var(--primary-blue);
+  }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- Header para mobile -->
+  <div class="app-header">
+    <div style="display: flex; align-items: center;">
+      <div class="avatar" id="mobile-avatar">FL</div>
+      <div class="app-title">Chat Corporativo</div>
+    </div>
+  </div>
+  
+  <!-- Conteúdo principal -->
+  <div class="app-content">
+    <!-- Header do usuário logado -->
+    <div class="user-profile">
+      <div class="avatar" id="user-avatar">FL</div>
+      <div class="user-info">
+        <div class="user-name" id="user-name">Carregando...</div>
+        <div class="user-role" id="user-role">Carregando nível...</div>
+      </div>
+    </div>
+    
+<!-- Título do nível selecionado -->
+<div class="selected-level" id="selected-level-text">Selecione um nível</div>
+
+<!-- Botões de nível (serão carregados dinamicamente) -->
+<div class="level-buttons" id="level-buttons-container">
+    <!-- Os botões serão inseridos aqui via JavaScript -->
+</div>
+    
+    <!-- Lista de contatos -->
+    <div class="contacts-list">
+      <!-- Contatos serão inseridos aqui via JavaScript -->
+    </div>
+  </div>
+  
+  <!-- Área de chat (inicialmente oculta em mobile) -->
+  <div class="chat-container">
+    <div class="chat-header">
+      <button class="back-button">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <div style="display: flex; align-items: center;">
+        <div class="avatar">M</div>
+        <div>
+          <div class="contact-name">Maria Silva</div>
+          <div class="contact-status">Online</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button>
+          <i class="fas fa-phone-alt" style="color: white;"></i>
+        </button>
+        <button>
+          <i class="fas fa-video" style="color: white;"></i>
+        </button>
+      </div>
+    </div>
+    
+    <div class="chat-messages">
+      <!-- Mensagens serão inseridas aqui via JavaScript -->
+    </div>
+    
+    <div class="chat-input">
+      <button>
+        <i class="far fa-smile"></i>
+      </button>
+      <button>
+        <i class="fas fa-paperclip"></i>
+      </button>
+      <input type="text" placeholder="Digite uma mensagem">
+      <button>
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Variáveis globais
+let nivelAtual = '';
+let usuarioLogado = {};
+let destino = ''; // Variável para armazenar o destinatário atual
+
+// Função para carregar informações do usuário logado
+async function carregarUsuarioLogado() {
+    try {
+        const response = await fetch('/api/usuario');
+        
+        if (response.ok) {
+            usuarioLogado = await response.json();
+            
+            // Atualizar a interface com os dados do usuário
+            document.getElementById('user-name').textContent = usuarioLogado.nome;
+            document.getElementById('user-role').textContent = usuarioLogado.nivel;
+            document.getElementById('user-avatar').textContent = usuarioLogado.iniciais;
+            document.getElementById('mobile-avatar').textContent = usuarioLogado.iniciais;
+            
+            return usuarioLogado;
+        } else {
+            window.location.href = '/login';
+            return null;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar usuário:', error);
+        window.location.href = '/login';
+        return null;
+    }
+}
+
+// Função para carregar os níveis do banco de dados (APENAS com usuários)
+async function carregarNiveis() {
+    try {
+        // Usar a NOVA API que retorna apenas níveis com usuários
+        const response = await fetch('/api/niveis-com-usuarios');
+        
+        if (response.ok) {
+            const niveis = await response.json();
+            
+            // Verificar se há níveis com usuários
+            if (niveis.length === 0) {
+                document.getElementById('level-buttons-container').innerHTML = 
+                    '<div class="empty">Nenhum nível com usuários encontrado</div>';
+                document.querySelector('.contacts-list').innerHTML = 
+                    '<div class="empty">Não há usuários em nenhum nível</div>';
+                return;
+            }
+            
+            renderizarBotoesNiveis(niveis);
+            
+            // Selecionar o primeiro nível por padrão (se existir)
+            if (niveis.length > 0) {
+                const primeiroNivel = niveis[0];
+                const primeiroBotao = document.querySelector(`.level-btn[data-level="${primeiroNivel.cod_nivel}"]`);
+                if (primeiroBotao) {
+                    primeiroBotao.classList.add('active');
+                    carregarContatos(primeiroNivel.cod_nivel);
+                }
+            }
+        } else {
+            console.error('Erro ao carregar níveis da API, tentando fallback...');
+            // Fallback: tentar carregar todos os níveis e filtrar depois
+            await carregarTodosNiveisEFiltrar();
+        }
+    } catch (error) {
+        console.error('Erro ao carregar níveis:', error);
+        // Fallback: tentar carregar todos os níveis e filtrar depois
+        await carregarTodosNiveisEFiltrar();
+    }
+}
+
+// Fallback: carrega todos os níveis e filtra os que têm usuários
+async function carregarTodosNiveisEFiltrar() {
+    try {
+        const response = await fetch('/api/niveis');
+        
+        if (response.ok) {
+            const todosNiveis = await response.json();
+            const niveisComUsuarios = [];
+            
+            // Verificar cada nível individualmente
+            for (const nivel of todosNiveis) {
+                const temUsuarios = await verificarSeNivelTemUsuarios(nivel.cod_nivel);
+                if (temUsuarios) {
+                    niveisComUsuarios.push(nivel);
+                }
+            }
+            
+            if (niveisComUsuarios.length === 0) {
+                document.getElementById('level-buttons-container').innerHTML = 
+                    '<div class="empty">Nenhum nível com usuários encontrado</div>';
+                return;
+            }
+            
+            renderizarBotoesNiveis(niveisComUsuarios);
+            
+            // Selecionar o primeiro nível com usuários
+            const primeiroNivel = niveisComUsuarios[0];
+            const primeiroBotao = document.querySelector(`.level-btn[data-level="${primeiroNivel.cod_nivel}"]`);
+            if (primeiroBotao) {
+                primeiroBotao.classList.add('active');
+                carregarContatos(primeiroNivel.cod_nivel);
+            }
+        } else {
+            // Último fallback: níveis fixos
+            console.error('Erro no fallback, usando níveis fixos...');
+            renderizarBotoesNiveis([
+                { cod_nivel: 1, nivel: "Júnior" },
+                { cod_nivel: 2, nivel: "Pleno" },
+                { cod_nivel: 3, nivel: "Sênior" }
+            ]);
+        }
+    } catch (error) {
+        console.error('Erro no fallback de níveis:', error);
+        document.getElementById('level-buttons-container').innerHTML = 
+            '<div class="error">Erro ao carregar níveis</div>';
+    }
+}
+
+// Função para verificar se um nível específico tem usuários
+async function verificarSeNivelTemUsuarios(nivelId) {
+    try {
+        const response = await fetch(`/api/contatos?nivel=${nivelId}`);
+        
+        if (response.ok) {
+            const contatos = await response.json();
+            return contatos.length > 0;
+        }
+        return false;
+    } catch (error) {
+        console.error('Erro ao verificar usuários do nível:', error);
+        return false;
+    }
+}
+
+// Função para renderizar os botões de nível
+function renderizarBotoesNiveis(niveis) {
+    const container = document.getElementById('level-buttons-container');
+    container.innerHTML = '';
+    
+    const icones = {
+        'júnior': 'fa-user-graduate',
+        'pleno': 'fa-user-tie', 
+        'sênior': 'fa-crown',
+        'gerente': 'fa-chart-line',
+        'coordenador': 'fa-users',
+        'supervisor': 'fa-user-shield',
+        'diretor': 'fa-building',
+        'estagiário': 'fa-graduation-cap'
+    };
+    
+    niveis.forEach(nivelObj => {
+        const nivel = nivelObj.nivel.toLowerCase();
+        const icone = icones[nivel] || 'fa-user';
+        
+        const button = document.createElement('button');
+        button.className = 'level-btn';
+        button.dataset.level = nivelObj.cod_nivel;
+        button.dataset.nivelNome = nivelObj.nivel;
+        
+        button.innerHTML = `
+            <i class="fas ${icone}"></i>
+            <span>${nivelObj.nivel}</span>
+        `;
+        
+        // Adicionar evento de clique
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.level-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            button.classList.add('active');
+            
+            const nivelId = button.dataset.level;
+            const nivelNome = button.dataset.nivelNome;
+            
+            document.getElementById('selected-level-text').textContent = `Nível: ${nivelNome}`;
+            carregarContatos(nivelId);
+        });
+        
+        container.appendChild(button);
+    });
+}
+
+// Função para carregar contatos com base no nível selecionado
+async function carregarContatos(nivelId) {
+    const contactsList = document.querySelector('.contacts-list');
+    
+    // Mostrar loading
+    contactsList.innerHTML = '<div class="loading">Carregando contatos...</div>';
+    
+    try {
+        const response = await fetch(`/api/contatos?nivel=${nivelId}`);
+        
+        if (response.ok) {
+            const contatos = await response.json();
+            renderizarContatos(contatos, nivelId);
+        } else {
+            console.error('Erro ao carregar contatos da API');
+            contactsList.innerHTML = '<div class="error">Erro ao carregar contatos</div>';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar contatos:', error);
+        contactsList.innerHTML = '<div class="error">Erro de conexão</div>';
+    }
+}
+
+// Função para renderizar os contatos na lista
+function renderizarContatos(contatos, nivelId) {
+    const contactsList = document.querySelector('.contacts-list');
+    const selectedLevelText = document.getElementById('selected-level-text');
+    
+    // Atualizar nível atual
+    nivelAtual = nivelId;
+    
+    // Atualizar texto do nível selecionado
+    const nivelNome = document.querySelector(`.level-btn[data-level="${nivelId}"]`).dataset.nivelNome;
+    selectedLevelText.textContent = `Nível: ${nivelNome} (${contatos.length} contatos)`;
+    
+    // Limpar lista atual
+    contactsList.innerHTML = '';
+    
+    if (contatos.length === 0) {
+        contactsList.innerHTML = '<div class="empty">Nenhum usuário encontrado neste nível</div>';
+        return;
+    }
+    
+    // Adicionar cada contato à lista
+    contatos.forEach(contato => {
+        const contactItem = document.createElement('div');
+        contactItem.className = 'contact-item';
+        contactItem.dataset.id = contato.id;
+        
+        contactItem.innerHTML = `
+            <div class="contact-avatar">${contato.avatar}</div>
+            <div class="contact-info">
+                <div class="contact-name">${contato.nome}</div>
+                <div class="contact-status">${contato.status} • ${contato.nivel}</div>
+            </div>
+        `;
+        
+        contactItem.addEventListener('click', () => {
+            abrirChat(contato);
+        });
+        
+        contactsList.appendChild(contactItem);
+    });
+}
+
+// Função para abrir o chat com um contato
+function abrirChat(contato) {
+    // Armazenar o destinatário atual
+    destino = contato.id;
+    
+    document.querySelector('.chat-container .avatar').textContent = contato.avatar;
+    document.querySelector('.chat-container .contact-name').textContent = contato.nome;
+    document.querySelector('.chat-container .contact-status').textContent = contato.status;
+    
+    carregarMensagens();
+    document.querySelector('.chat-container').classList.add('active');
+}
+
+// Função para carregar mensagens no chat
+async function carregarMensagens() {
+    if (!destino) return;
+    
+    const chatMessages = document.querySelector('.chat-messages');
+    chatMessages.innerHTML = '<div class="loading">Carregando mensagens...</div>';
+    
+    try {
+        const response = await fetch(`/api/mensagens?dest=${destino}`);
+        
+        if (response.ok) {
+            const mensagens = await response.json();
+            renderizarMensagens(mensagens);
+        } else {
+            console.error('Erro ao carregar mensagens');
+            chatMessages.innerHTML = '<div class="error">Erro ao carregar mensagens</div>';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar mensagens:', error);
+        chatMessages.innerHTML = '<div class="error">Erro de conexão</div>';
+    }
+}
+
+// Função para renderizar mensagens (CORRIGIDA)
+function renderizarMensagens(mensagens) {
+    const chatMessages = document.querySelector('.chat-messages');
+    chatMessages.innerHTML = '';
+    
+    if (mensagens.length === 0) {
+        chatMessages.innerHTML = '<div class="empty">Nenhuma mensagem ainda</div>';
+        return;
+    }
+    
+    mensagens.forEach(msg => {
+        const messageDiv = document.createElement('div');
+        const isOwnMessage = msg.cod_usuario == usuarioLogado.id;
+        messageDiv.className = `message ${isOwnMessage ? 'sent' : 'received'}`;
+        
+        // Formatar data - CORREÇÃO AQUI
+        const dataEnvio = new Date(msg.data_envio); // ← data_envio em vez de data_hora
+        const time = `${dataEnvio.getHours().toString().padStart(2, '0')}:${dataEnvio.getMinutes().toString().padStart(2, '0')}`;
+        
+        // CORREÇÃO: usar msg.mensagem em vez de msg.text
+        messageDiv.innerHTML = `
+            <div class="message-bubble">${msg.mensagem}</div>
+            <div class="message-time">${time}</div>
+        `;
+        
+        chatMessages.appendChild(messageDiv);
+    });
+    
+    // Rolagem para a última mensagem
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Função para enviar mensagem
+async function enviarMensagem() {
+    const input = document.querySelector('.chat-input input');
+    const message = input.value.trim();
+    
+    if (!message || !destino || !usuarioLogado.id) return;
+    
+    try {
+        const response = await fetch('/api/enviar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                mensagem: message, 
+                dest: destino
+            })
+        });
+        
+        if (response.ok) {
+            input.value = "";
+            // Recarregar mensagens após enviar
+            await carregarMensagens();
+        } else {
+            console.error('Erro ao enviar mensagem');
+        }
+    } catch (error) {
+        console.error('Erro ao enviar mensagem:', error);
+    }
+}
+
+// Configurar eventos
+function configurarEventos() {
+    document.querySelector('.back-button').addEventListener('click', () => {
+        document.querySelector('.chat-container').classList.remove('active');
+    });
+
+    document.querySelector('.chat-input button:last-child').addEventListener('click', enviarMensagem);
+
+    document.querySelector('.chat-input input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            enviarMensagem();
+        }
+    });
+}
+
+// Inicialização
+$(document).ready(async function() {
+    usuarioLogado = await carregarUsuarioLogado();
+    
+    if (usuarioLogado) {
+        await carregarNiveis();
+        configurarEventos();
+    }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login Chat Corporativo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  body {
+    font-family: 'Inter', sans-serif;
+  }
+  .gradient-bg {
+    background: linear-gradient(135deg, #1e3a8a, #0ea5e9);
+    animation: gradient 10s ease infinite;
+    background-size: 400% 400%;
+  }
+  @keyframes gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  .input-focus:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+    outline: none;
+  }
+</style>
+</head>
+<body class="min-h-screen flex items-center justify-center gradient-bg p-4">
+
+<div class="bg-white shadow-2xl rounded-3xl overflow-hidden w-full max-w-5xl flex flex-col md:flex-row">
+  <!-- Painel Ilustração -->
+  <div class="bg-gradient-to-br from-blue-800 to-blue-500 text-white flex flex-col justify-center items-center p-12 md:w-1/2 relative overflow-hidden">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-52 h-52 mb-6" viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)">
+      <path d="M6 14H18V12H6V14ZM6 11H18V9H6V11ZM6 8H18V6H6V8ZM2 22V4C2 3.45 2.19583 2.97917 2.5875 2.5875C2.97917 2.19583 3.45 2 4 2H20C20.55 2 21.0208 2.19583 21.4125 2.5875C21.8042 2.97917 22 3.45 22 4V16C22 16.55 21.8042 17.0208 21.4125 17.4125C21.0208 17.8042 20.55 18 20 18H6L2 22Z"/>
+    </svg>
+    <h2 class="text-3xl md:text-4xl font-bold text-center mb-2">Sistema de Chat Corporativo</h2>
+    <p class="text-center opacity-90 text-lg">Conecte-se com sua equipe de forma rápida e segura</p>
+    <div class="absolute -bottom-16 -left-16 w-72 h-72 bg-blue-400 rounded-full opacity-30 animate-pulse"></div>
+    <div class="absolute -top-16 -right-16 w-72 h-72 bg-blue-600 rounded-full opacity-30 animate-pulse delay-500"></div>
+  </div>
+
+  <!-- Painel Login -->
+  <div class="p-12 flex flex-col justify-center md:w-1/2">
+    <div class="text-center mb-6 text-blue-800">
+      <i class="fas fa-comments text-6xl"></i>
+    </div>
+    <h2 class="text-3xl font-bold text-blue-900 mb-8 text-center">Faça seu login</h2>
+
+<form method="post" action="/login" class="space-y-6">
+  <!-- Select de nomes -->
+  <div class="relative">
+    <i class="fas fa-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+    <select name="usuario_logado" required
+      class="w-full border border-gray-300 rounded-xl pl-12 pr-4 py-4 input-focus shadow-sm transition-all">
+      <option value="">-- Selecione seu usuário --</option>
+      {{USUARIOS}} <!-- Será substituído pelo backend -->
+    </select>
+  </div>
+
+  <!-- Senha -->
+  <div class="relative">
+    <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+    <input type="password" name="senha" placeholder="Senha" required
+      class="w-full border border-gray-300 rounded-xl pl-12 pr-4 py-4 input-focus shadow-sm transition-all">
+  </div>
+
+  <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
+    Entrar no Chat
+  </button>
+</form>
+
+    <p class="text-center text-gray-500 text-sm mt-10">&copy; 2025 Sistema de Chat - Matheus bonitão</p>
+  </div>
+</div>
+
+</body>
+</html>
