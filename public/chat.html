@@ -427,6 +427,75 @@
     font-weight: 500;
     color: var(--primary-blue);
   }
+
+   /* Modal de zoom */
+    .image-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        overflow: auto;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .modal-content {
+        display: block;
+        max-width: 90%;
+        max-height: 90%;
+        margin: auto;
+        border-radius: 8px;
+        transition: transform 0.3s ease;
+    }
+    
+    .close-modal {
+        position: absolute;
+        top: 15px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .close-modal:hover {
+        color: #bbb;
+    }
+    
+    .modal-controls {
+        position: absolute;
+        bottom: 20px;
+        display: flex;
+        gap: 10px;
+    }
+    
+    .modal-btn {
+        background-color: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    
+    .modal-btn:hover {
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .chat-image {
+        max-width: 200px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    
+    .chat-image:hover {
+        transform: scale(1.02);
+    }
 </style>
 </head>
 <body>
@@ -504,6 +573,17 @@
         <i class="fas fa-paper-plane"></i>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- Modal para zoom de imagem -->
+<div class="image-modal" id="imageModal">
+  <span class="close-modal" id="closeModal">&times;</span>
+  <img class="modal-content" id="modalImage">
+  <div class="modal-controls">
+    <button class="modal-btn" id="zoomIn">+</button>
+    <button class="modal-btn" id="zoomOut">-</button>
+    <button class="modal-btn" id="resetZoom">Reset</button>
   </div>
 </div>
 
@@ -794,37 +874,176 @@ async function carregarMensagens() {
     }
 }
 
-// Função para renderizar mensagens (CORRIGIDA)
-function renderizarMensagens(mensagens) {
+// Cache de imagens para evitar recarregamentos desnecessários
+const imageCache = new Map();
+
+// Função para carregar mensagens no chat
+async function carregarMensagens() {
+    if (!destino) return;
+    
+    const chatMessages = document.querySelector('.chat-messages');
+    chatMessages.innerHTML = '<div class="loading">Carregando mensagens...</div>';
+    
+    try {
+        const response = await fetch(`/api/mensagens?dest=${destino}`);
+        
+        if (response.ok) {
+            const mensagens = await response.json();
+            await renderizarMensagens(mensagens);
+        } else {
+            console.error('Erro ao carregar mensagens');
+            chatMessages.innerHTML = '<div class="error">Erro ao carregar mensagens</div>';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar mensagens:', error);
+        chatMessages.innerHTML = '<div class="error">Erro de conexão</div>';
+    }
+}
+
+// Função para converter Buffer para Data URL
+function bufferToDataUrl(buffer, mimeType = 'image/jpeg') {
+    try {
+        // Se já é uma string, retorna diretamente (pode ser já um data URL)
+        if (typeof buffer === 'string') {
+            // Verifica se já é um data URL
+            if (buffer.startsWith('data:')) {
+                return buffer;
+            }
+            // Se não for, assume que é base64 e formata como data URL
+            return `data:${mimeType};base64,${buffer}`;
+        }
+        
+        // Se é um objeto Buffer com propriedade data (array de bytes)
+        if (buffer && typeof buffer === 'object' && buffer.data) {
+            const bytes = new Uint8Array(buffer.data);
+            let binary = '';
+            const len = bytes.length;
+            
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            
+            return `data:${mimeType};base64,${window.btoa(binary)}`;
+        }
+        
+        console.error('Formato de buffer não reconhecido:', buffer);
+        return null;
+    } catch (error) {
+        console.error('Erro ao converter buffer para data URL:', error);
+        return null;
+    }
+}
+
+// Função para renderizar mensagens (texto e imagens)
+async function renderizarMensagens(mensagens) {
     const chatMessages = document.querySelector('.chat-messages');
     chatMessages.innerHTML = '';
-    
+
     if (mensagens.length === 0) {
-        chatMessages.innerHTML = '<div class="empty">Nenhuma mensagem ainda</div>';
+        chatMessages.innerHTML = '<div class="no-messages">Nenhuma mensagem ainda.</div>';
         return;
     }
-    
+
+    // Precarregar imagens antes de renderizar
+    await preCarregarImagens(mensagens);
+
     mensagens.forEach(msg => {
         const messageDiv = document.createElement('div');
-        const isOwnMessage = msg.cod_usuario == usuarioLogado.id;
-        messageDiv.className = `message ${isOwnMessage ? 'sent' : 'received'}`;
-        
-        // Formatar data - CORREÇÃO AQUI
-        const dataEnvio = new Date(msg.data_envio); // ← data_envio em vez de data_hora
-        const time = `${dataEnvio.getHours().toString().padStart(2, '0')}:${dataEnvio.getMinutes().toString().padStart(2, '0')}`;
-        
-        // CORREÇÃO: usar msg.mensagem em vez de msg.text
-        messageDiv.innerHTML = `
-            <div class="message-bubble">${msg.mensagem}</div>
-            <div class="message-time">${time}</div>
-        `;
-        
+        messageDiv.className = `message ${msg.is_own ? 'own-message' : 'other-message'}`;
+
+        if (msg.tipo === 'texto') {
+            messageDiv.innerHTML = `
+                <div class="message-content">${msg.conteudo || msg.mensagem || ''}</div>
+                <div class="message-time">${formatarData(msg.data_envio)}</div>
+            `;
+        } else if (msg.tipo === 'imagem' && msg.conteudo) {
+            // Converter buffer para data URL se necessário
+            const imageUrl = bufferToDataUrl(msg.conteudo) || '#';
+            
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <img src="${imageUrl}" alt="Imagem enviada" class="chat-image" 
+                         onload="this.style.opacity=1" 
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                    <div class="image-error" style="display: none;">
+                        Erro ao carregar imagem
+                    </div>
+                </div>
+                <div class="message-time">${formatarData(msg.data_envio)}</div>
+            `;
+        }
+
         chatMessages.appendChild(messageDiv);
     });
-    
+
     // Rolagem para a última mensagem
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
+// Função para pré-carregar imagens (atualizada para lidar com buffers)
+async function preCarregarImagens(mensagens) {
+    const imagensParaCarregar = mensagens
+        .filter(msg => msg.tipo === 'imagem' && msg.conteudo)
+        .map(msg => bufferToDataUrl(msg.conteudo))
+        .filter(url => url !== null);
+    
+    const promises = imagensParaCarregar.map(src => {
+        return new Promise((resolve) => {
+            // Se já está no cache, não precisa carregar novamente
+            if (imageCache.has(src)) {
+                resolve();
+                return;
+            }
+            
+            const img = new Image();
+            img.onload = () => {
+                imageCache.set(src, true);
+                resolve();
+            };
+            img.onerror = () => {
+                console.error('Erro ao carregar imagem:', src);
+                imageCache.set(src, false);
+                resolve();
+            };
+            img.src = src;
+        });
+    });
+    
+    await Promise.all(promises);
+}
+
+// Função para formatar data
+function formatarData(dataString) {
+    const data = new Date(dataString);
+    return data.toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+// Adicionar este CSS para garantir que as imagens sejam exibidas corretamente
+const estilo = document.createElement('style');
+estilo.textContent = `
+    .chat-image {
+        max-width: 200px;
+        max-height: 200px;
+        border-radius: 8px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .image-error {
+        color: #f02849;
+        font-style: italic;
+        padding: 8px;
+        background-color: #ffe6e6;
+        border-radius: 8px;
+    }
+`;
+document.head.appendChild(estilo);
 
 // Função para enviar mensagem
 async function enviarMensagem() {

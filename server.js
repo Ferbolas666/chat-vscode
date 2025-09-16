@@ -315,8 +315,8 @@ app.get('/api/niveis-com-usuarios', requireAuth, (req, res) => {
     });
 });
 
-// API para carregar mensagens (VERSÃO COM CRIPTOGRAFIA)
-app.get('/api/mensagens', requireAuth, (req, res) => {
+// API para carregar mensagens (VERSÃO COM CRIPTOGRAFIA E IMAGENS)
+app.get('/api/mensagens', requireAuth, async (req, res) => {
     const { dest } = req.query;
     const usuario_logado = req.session.usuario_logado;
     
@@ -326,48 +326,117 @@ app.get('/api/mensagens', requireAuth, (req, res) => {
 
     const codDestinatario = parseInt(dest.toString());
     
-    Firebird.attach(dbOptions, (err, db) => {
-        if (err) {
-            console.error('Erro ao conectar ao banco:', err);
-            return res.status(500).json({ error: 'Erro no servidor' });
-        }
+    try {
+        // Buscar mensagens de texto do Firebird
+        const mensagensTexto = await new Promise((resolve, reject) => {
+            Firebird.attach(dbOptions, (err, db) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
 
-        const query = `
-            SELECT m.id, m.cod_usuario, m.cod_destinatario, 
-                   f.nome AS usuario, 
-                   CAST(m.mensagem AS VARCHAR(1000)) AS mensagem,
-                   m.data_envio
-            FROM chat_mensagens m
-            LEFT JOIN FUNCIONARIOS f ON f.cod_funcionario = m.cod_usuario
-            WHERE (m.cod_usuario = ? AND m.cod_destinatario = ?)
-               OR (m.cod_usuario = ? AND m.cod_destinatario = ?)
-            ORDER BY m.data_envio ASC
+                const query = `
+                    SELECT m.id, m.cod_usuario, m.cod_destinatario, 
+                           f.nome AS usuario, 
+                           CAST(m.mensagem AS VARCHAR(1000)) AS mensagem,
+                           m.data_envio
+                    FROM chat_mensagens m
+                    LEFT JOIN FUNCIONARIOS f ON f.cod_funcionario = m.cod_usuario
+                    WHERE (m.cod_usuario = ? AND m.cod_destinatario = ?)
+                       OR (m.cod_usuario = ? AND m.cod_destinatario = ?)
+                    ORDER BY m.data_envio ASC
+                `;
+                
+                const params = [usuario_logado, codDestinatario, codDestinatario, usuario_logado];
+
+                db.query(query, params, (err, result) => {
+                    db.detach();
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(result.map(row => ({
+                            id: row.ID,
+                            tipo: 'texto',
+                            cod_usuario: row.COD_USUARIO,
+                            cod_destinatario: row.COD_DESTINATARIO,
+                            usuario: row.USUARIO || "Sem nome",
+                            conteudo: decryptMessage(row.MENSAGEM || ""),
+                            data_envio: row.DATA_ENVIO,
+                            is_own: row.COD_USUARIO == usuario_logado
+                        })));
+                    }
+                });
+            });
+        });
+
+        // Buscar imagens do PostgreSQL
+        const imagensQuery = `
+            SELECT id, cod_usuario, cod_destinatario, arquivo, data_envio
+            FROM chat_mensagens 
+            WHERE (cod_usuario = $1 AND cod_destinatario = $2)
+               OR (cod_usuario = $2 AND cod_destinatario = $1)
+            ORDER BY data_envio ASC
         `;
         
-        const params = [usuario_logado, codDestinatario, codDestinatario, usuario_logado];
+        const imagensResult = await pgPool.query(imagensQuery, [usuario_logado, codDestinatario]);
+        
+        // Buscar nomes dos usuários das imagens
+        const codigosUsuariosImagens = [...new Set(imagensResult.rows.map(row => row.cod_usuario))];
+        const nomesUsuarios = {};
 
-        db.query(query, params, (err, result) => {
-            db.detach();
-            
-            if (err) {
-                console.error('Erro na consulta de mensagens:', err);
-                return res.status(500).json({ error: 'Erro no servidor' });
-            }
+        if (codigosUsuariosImagens.length > 0) {
+            await new Promise((resolve, reject) => {
+                Firebird.attach(dbOptions, (err, db) => {
+                    if (err) {
+                        console.error('Erro ao conectar ao Firebird:', err);
+                        resolve();
+                        return;
+                    }
 
-            // Formatar as mensagens para o frontend COM DESCRIPTOGRAFIA
-            const mensagens = result.map(row => ({
-                id: row.ID,
-                cod_usuario: row.COD_USUARIO,
-                cod_destinatario: row.COD_DESTINATARIO,
-                usuario: row.USUARIO || "Sem nome",
-                mensagem: decryptMessage(row.MENSAGEM || ""),
-                data_envio: row.DATA_ENVIO,
-                is_own: row.COD_USUARIO == usuario_logado
-            }));
+                    const placeholders = codigosUsuariosImagens.map(() => '?').join(',');
+                    const queryNomes = `
+                        SELECT cod_funcionario, nome
+                        FROM FUNCIONARIOS
+                        WHERE cod_funcionario IN (${placeholders})
+                    `;
 
-            res.json(mensagens);
-        });
-    });
+                    db.query(queryNomes, codigosUsuariosImagens, (err, result) => {
+                        db.detach();
+                        if (err) {
+                            console.error('Erro ao buscar nomes:', err);
+                        } else {
+                            result.forEach(row => {
+                                nomesUsuarios[row.COD_FUNCIONARIO] = row.NOME;
+                            });
+                        }
+                        resolve();
+                    });
+                });
+            });
+        }
+
+        // Formatar mensagens de imagem
+        const mensagensImagem = imagensResult.rows.map(row => ({
+            id: row.id,
+            tipo: 'imagem',
+            cod_usuario: row.cod_usuario,
+            cod_destinatario: row.cod_destinatario,
+            usuario: nomesUsuarios[row.cod_usuario] || "Sem nome",
+            conteudo: row.arquivo,
+            data_envio: row.data_envio,
+            is_own: row.cod_usuario == usuario_logado
+        }));
+
+        // Combinar e ordenar todas as mensagens
+        const todasMensagens = [...mensagensTexto, ...mensagensImagem];
+        todasMensagens.sort((a, b) => new Date(a.data_envio) - new Date(b.data_envio));
+
+        res.json(todasMensagens);
+
+    } catch (error) {
+        console.error('Erro ao carregar mensagens:', error);
+        res.status(500).json({ error: 'Erro ao carregar mensagens' });
+    }
 });
 
 // API para enviar mensagem (COM CRIPTOGRAFIA AES-256 e replicação no Postgres)
