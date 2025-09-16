@@ -230,9 +230,12 @@ app.get('/api/niveis', requireAuth, (req, res) => {
     });
 });
 
-// API para obter contatos por nível
+// API para obter contatos por nível com verificação de permissões
 app.get('/api/contatos', requireAuth, (req, res) => {
     const { nivel } = req.query;
+    const usuario_logado = req.session.usuario_logado;
+    
+    console.log(`Solicitação de contatos para o nível: ${nivel} pelo usuário: ${usuario_logado}`);
     
     if (!nivel) {
         return res.status(400).json({ error: 'Parâmetro nível é obrigatório' });
@@ -244,39 +247,128 @@ app.get('/api/contatos', requireAuth, (req, res) => {
             return res.status(500).json({ error: 'Erro no servidor' });
         }
 
-        const query = `
-            SELECT f.cod_funcionario, f.nome, n.nivel
+        // Primeiro, obter o nível do usuário logado
+        const queryNivelUsuario = `
+            SELECT n.nivel, n.cod_nivel
             FROM FUNCIONARIOS f
             INNER JOIN NIVEL_USUARIO n ON f.cod_nivel = n.cod_nivel
-            WHERE f.cod_nivel = ?
-            ORDER BY f.nome
+            WHERE f.cod_funcionario = ?
         `;
-        
-        db.query(query, [nivel], (err, result) => {
-            db.detach();
-            
+
+        db.query(queryNivelUsuario, [usuario_logado], (err, resultNivel) => {
             if (err) {
-                console.error('Erro na consulta de contatos:', err);
+                db.detach();
+                console.error('Erro ao obter nível do usuário:', err);
                 return res.status(500).json({ error: 'Erro no servidor' });
             }
 
-            const contatos = result.map(row => {
-                const iniciais = row.NOME.split(' ')
-                    .map(nome => nome[0])
-                    .join('')
-                    .toUpperCase()
-                    .substring(0, 2);
-                
-                return {
-                    id: row.COD_FUNCIONARIO,
-                    nome: row.NOME,
-                    nivel: row.NIVEL,
-                    avatar: iniciais,
-                    status: 'Online'
-                };
-            });
+            if (resultNivel.length === 0) {
+                db.detach();
+                return res.status(404).json({ error: 'Usuário não encontrado' });
+            }
 
-            res.json(contatos);
+            const nivelUsuarioLogado = resultNivel[0].NIVEL;
+            const codNivelUsuarioLogado = resultNivel[0].COD_NIVEL;
+
+            console.log(`Usuário logado: Nível ${nivelUsuarioLogado}, Código ${codNivelUsuarioLogado}`);
+
+            // Buscar todos os níveis disponíveis para determinar as permissões
+            const queryTodosNiveis = `
+                SELECT cod_nivel, nivel FROM NIVEL_USUARIO
+            `;
+
+            db.query(queryTodosNiveis, (err, resultTodosNiveis) => {
+                if (err) {
+                    db.detach();
+                    console.error('Erro ao obter níveis:', err);
+                    return res.status(500).json({ error: 'Erro no servidor' });
+                }
+
+                // Mapear códigos dos níveis
+                const codigosNiveis = {};
+                resultTodosNiveis.forEach(row => {
+                    codigosNiveis[row.NIVEL] = row.COD_NIVEL;
+                });
+
+                console.log('Códigos dos níveis:', codigosNiveis);
+
+                // Definir quais níveis o usuário logado pode acessar
+                let codNiveisPermitidos = [];
+                
+                switch(nivelUsuarioLogado) {
+                    case 'MASTER':
+                        // Master pode acessar todos os níveis
+                        codNiveisPermitidos = resultTodosNiveis.map(row => row.COD_NIVEL);
+                        break;
+                    case 'ADMINISTRATIVO':
+                        codNiveisPermitidos = [
+                            codigosNiveis['ADMINISTRATIVO'],
+                            codigosNiveis['INQUILINO']
+                        ].filter(Boolean);
+                        break;
+                    case 'PROPRIETARIO':
+                        codNiveisPermitidos = [
+                            codigosNiveis['ADMINISTRATIVO'],
+                            codigosNiveis['PROPRIETARIO']
+                        ].filter(Boolean);
+                        break;
+                    case 'INQUILINO':
+                        codNiveisPermitidos = [
+                            codigosNiveis['ADMINISTRATIVO'],
+                            codigosNiveis['INQUILINO']
+                        ].filter(Boolean);
+                        break;
+                    default:
+                        codNiveisPermitidos = [];
+                }
+
+                console.log(`Níveis permitidos para ${nivelUsuarioLogado}: ${codNiveisPermitidos}`);
+
+                // Verificar se o nível solicitado está na lista de permitidos
+                const nivelSolicitado = parseInt(nivel);
+                if (!codNiveisPermitidos.includes(nivelSolicitado)) {
+                    db.detach();
+                    console.log(`Acesso negado: Usuário ${nivelUsuarioLogado} tentou acessar nível ${nivelSolicitado}`);
+                    return res.status(403).json({ error: 'Acesso não permitido a este nível' });
+                }
+
+                // Se tem permissão, buscar os contatos do nível solicitado
+                const query = `
+                    SELECT f.cod_funcionario, f.nome, n.nivel
+                    FROM FUNCIONARIOS f
+                    INNER JOIN NIVEL_USUARIO n ON f.cod_nivel = n.cod_nivel
+                    WHERE f.cod_nivel = ?
+                    ORDER BY f.nome
+                `;
+                
+                db.query(query, [nivel], (err, result) => {
+                    db.detach();
+                    
+                    if (err) {
+                        console.error('Erro na consulta de contatos:', err);
+                        return res.status(500).json({ error: 'Erro no servidor' });
+                    }
+
+                    const contatos = result.map(row => {
+                        const iniciais = row.NOME.split(' ')
+                            .map(nome => nome[0])
+                            .join('')
+                            .toUpperCase()
+                            .substring(0, 2);
+                        
+                        return {
+                            id: row.COD_FUNCIONARIO,
+                            nome: row.NOME,
+                            nivel: row.NIVEL,
+                            avatar: iniciais,
+                            status: 'Online'
+                        };
+                    });
+
+                    console.log(`Retornando ${contatos.length} contatos para o nível ${nivel}`);
+                    res.json(contatos);
+                });
+            });
         });
     });
 });
