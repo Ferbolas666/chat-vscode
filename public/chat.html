@@ -496,6 +496,40 @@
     .chat-image:hover {
         transform: scale(1.02);
     }
+
+    /* Estilos adicionais para os novos botões */
+    .modal-header {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        display: flex;
+        gap: 10px;
+        z-index: 1001;
+    }
+    
+    .modal-header-btn {
+        background-color: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 18px;
+        transition: background-color 0.3s;
+    }
+    
+    .modal-header-btn:hover {
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .close-modal {
+        position: static;
+        font-size: 24px;
+    }
 </style>
 </head>
 <body>
@@ -578,7 +612,15 @@
 
 <!-- Modal para zoom de imagem -->
 <div class="image-modal" id="imageModal">
-  <span class="close-modal" id="closeModal">&times;</span>
+  <div class="modal-header">
+    <button class="modal-header-btn" id="downloadImage" title="Salvar imagem">
+      💾
+    </button>
+    <button class="modal-header-btn" id="shareImage" title="Compartilhar imagem">
+      📤
+    </button>
+  <span class="close-modal modal-header-btn" id="closeModal" title="Fechar">&times;</span>
+  </div>
   <img class="modal-content" id="modalImage">
   <div class="modal-controls">
     <button class="modal-btn" id="zoomIn">+</button>
@@ -978,6 +1020,8 @@ async function renderizarMensagens(mensagens) {
 
     // Rolagem para a última mensagem
     chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    adicionarEventosZoom();
 }
 
 // Função para pré-carregar imagens (atualizada para lidar com buffers)
@@ -1075,6 +1119,131 @@ async function enviarMensagem() {
         console.error('Erro ao enviar mensagem:', error);
     }
 }
+
+// Elementos do modal
+    const imageModal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+    const closeModal = document.getElementById('closeModal');
+    const zoomInBtn = document.getElementById('zoomIn');
+    const zoomOutBtn = document.getElementById('zoomOut');
+    const resetZoomBtn = document.getElementById('resetZoom');
+    const downloadImageBtn = document.getElementById('downloadImage');
+    const shareImageBtn = document.getElementById('shareImage');
+    
+    let currentZoom = 1;
+    let currentImageSrc = '';
+    
+    // Função para abrir o modal com a imagem
+    function abrirModal(src) {
+        modalImage.src = src;
+        currentImageSrc = src;
+        currentZoom = 1;
+        modalImage.style.transform = `scale(${currentZoom})`;
+        imageModal.style.display = 'flex';
+    }
+    
+    // Função para fechar o modal
+    function fecharModal() {
+        imageModal.style.display = 'none';
+    }
+    
+    // Função para baixar a imagem
+    function baixarImagem() {
+        if (!currentImageSrc) return;
+        
+        try {
+            // Criar um link temporário para download
+            const link = document.createElement('a');
+            link.href = currentImageSrc;
+            
+            // Gerar um nome de arquivo com timestamp
+            const timestamp = new Date().getTime();
+            link.download = `imagem-chat-${timestamp}.png`;
+            
+            // Disparar o download
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error('Erro ao baixar imagem:', error);
+            alert('Erro ao baixar a imagem. Tente novamente.');
+        }
+    }
+    
+    // Função para compartilhar a imagem
+    async function compartilharImagem() {
+        if (!currentImageSrc || !navigator.share) {
+            alert('Seu navegador não suporta a funcionalidade de compartilhamento.');
+            return;
+        }
+        
+        try {
+            // Converter data URL para blob
+            const response = await fetch(currentImageSrc);
+            const blob = await response.blob();
+            
+            // Compartilhar a imagem
+            const file = new File([blob], 'imagem-chat.png', { type: 'image/png' });
+            
+            await navigator.share({
+                title: 'Imagem do Chat',
+                files: [file]
+            });
+        } catch (error) {
+            console.error('Erro ao compartilhar imagem:', error);
+            
+            // Fallback: copiar link para área de transferência
+            if (navigator.clipboard && currentImageSrc.startsWith('http')) {
+                try {
+                    await navigator.clipboard.writeText(currentImageSrc);
+                    alert('Link da imagem copiado para a área de transferência!');
+                } catch (copyError) {
+                    console.error('Erro ao copiar link:', copyError);
+                }
+            }
+        }
+    }
+    
+    // Event listeners para os controles do modal
+    closeModal.addEventListener('click', fecharModal);
+    downloadImageBtn.addEventListener('click', baixarImagem);
+    shareImageBtn.addEventListener('click', compartilharImagem);
+    
+    zoomInBtn.addEventListener('click', () => {
+        currentZoom += 0.2;
+        modalImage.style.transform = `scale(${currentZoom})`;
+    });
+    
+    zoomOutBtn.addEventListener('click', () => {
+        if (currentZoom > 0.4) {
+            currentZoom -= 0.2;
+            modalImage.style.transform = `scale(${currentZoom})`;
+        }
+    });
+    
+    resetZoomBtn.addEventListener('click', () => {
+        currentZoom = 1;
+        modalImage.style.transform = `scale(${currentZoom})`;
+    });
+    
+    // Fechar modal ao clicar fora da imagem
+    imageModal.addEventListener('click', (e) => {
+        if (e.target === imageModal) {
+            fecharModal();
+        }
+    });
+    
+    // Adicionar evento de clique às imagens do chat
+    function adicionarEventosZoom() {
+        document.querySelectorAll('.chat-image').forEach(img => {
+            img.addEventListener('click', () => {
+                abrirModal(img.src);
+            });
+        });
+    }
+
+// Chmar esta função após carregar as mensagens
+ //adicionarEventosZoom();
 
 // Adicionar input oculto para seleção de arquivos
 const imageInput = document.createElement('input');
