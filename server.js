@@ -1,14 +1,31 @@
 const express = require('express');
 const session = require('express-session');
 const Firebird = require('node-firebird');
+const { Pool } = require('pg'); // Adicione esta linha para importar o PostgreSQL
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const app = express();
-
+// Configure o multer corretamente
+const multer = require('multer');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  }
+});
 // CHAVE SECRETA (em produção, use variáveis de ambiente!)
 const CRYPTO_KEY = crypto.scryptSync('minha-chave-super-secreta-chat-app-2024', 'salt', 32);
 const ALGORITHM = 'aes-256-cbc';
+
+// Configuração do PostgreSQL - Adicione este bloco
+const pgPool = new Pool({
+  user: 'postgres',
+  host: 'localhost',
+  database: 'chat_imagens',
+  password: 'senha4253',
+  port: 5432,
+});
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -353,8 +370,8 @@ app.get('/api/mensagens', requireAuth, (req, res) => {
     });
 });
 
-// API para enviar mensagem (COM CRIPTOGRAFIA AES-256)
-app.post('/api/enviar', requireAuth, (req, res) => {
+// API para enviar mensagem (COM CRIPTOGRAFIA AES-256 e replicação no Postgres)
+app.post('/api/enviar', requireAuth, async (req, res) => {
     const { mensagem, dest } = req.body;
     const usuario_logado = req.session.usuario_logado;
 
@@ -362,41 +379,81 @@ app.post('/api/enviar', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'Usuário, mensagem e destinatário são obrigatórios' });
     }
 
-    Firebird.attach(dbOptions, (err, db) => {
+    const codFuncionario = parseInt(dest.toString());
+    const mensagemCriptografada = encryptMessage(mensagem);
+
+    // SALVAR NO FIREBIRD
+    Firebird.attach(dbOptions, async (err, db) => {
         if (err) {
-            console.error('Erro ao conectar ao banco:', err);
-            return res.status(500).json({ error: 'Erro no servidor' });
+            console.error('Erro ao conectar ao Firebird:', err);
+            return res.status(500).json({ error: 'Erro no servidor Firebird' });
         }
 
-        const codFuncionario = parseInt(dest.toString());
-        
-        // CRIPTOGRAFAR A MENSAGEM COM AES-256
-        const mensagemCriptografada = encryptMessage(mensagem);
-            
-        const queryInsert = `
+        const queryFB = `
             INSERT INTO chat_mensagens 
                 (cod_usuario, cod_destinatario, usuario, mensagem, data_envio) 
             VALUES 
-                (?, ?, 
-                (SELECT nome FROM FUNCIONARIOS WHERE cod_funcionario = ?),
-                ?, CURRENT_TIMESTAMP)
+                (?, ?, (SELECT nome FROM FUNCIONARIOS WHERE cod_funcionario = ?), ?, CURRENT_TIMESTAMP)
         `;
-        
-        // USAR MENSAGEM CRIPTOGRAFADA
-        db.query(queryInsert, [usuario_logado, codFuncionario, usuario_logado, mensagemCriptografada], (err, result) => {
+
+        db.query(queryFB, [usuario_logado, codFuncionario, usuario_logado, mensagemCriptografada], async (errFB) => {
             db.detach();
-            
-            if (err) {
-                console.error('Erro ao enviar mensagem:', err);
-                return res.status(500).json({ error: 'Erro no servidor' });
+
+            if (errFB) {
+                console.error('Erro ao salvar no Firebird:', errFB);
+                return res.status(500).json({ error: 'Erro ao salvar mensagem no Firebird' });
             }
 
-            res.json({ 
-                success: true,
-                message: 'Mensagem criptografada enviada com sucesso'
-            });
+            // ✅ SALVAR NO POSTGRES
+            try {
+                await pgPool.query(`
+                    INSERT INTO chat_mensagens 
+                        (cod_usuario, cod_destinatario, usuario, mensagem, data_envio)
+                    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                `, [usuario_logado, codFuncionario, req.session.usuario_nome, mensagemCriptografada]);
+
+                res.json({ 
+                    success: true, 
+                    message: 'Mensagem enviada e replicada no Postgres com sucesso' 
+                });
+            } catch (errPG) {
+                console.error('Erro ao salvar no Postgres:', errPG);
+                return res.status(500).json({ error: 'Erro ao salvar mensagem no Postgres' });
+            }
         });
     });
+});
+
+// Rota para upload de imagem
+app.post('/upload-imagem', upload.single('imagem'), async (req, res) => {
+  try {
+    // Verifique se o arquivo foi recebido
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+    }
+
+    const { cod_usuario, cod_destinatario, usuario, mensagem } = req.body;
+    const imagem = req.file.buffer;
+
+    const query = `
+      INSERT INTO chat_mensagens 
+        (cod_usuario, cod_destinatario, usuario, mensagem, data_envio, arquivo)
+      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
+    `;
+
+    await pgPool.query(query, [
+      cod_usuario,
+      cod_destinatario,
+      usuario,
+      mensagem,
+      imagem
+    ]);
+
+    res.status(200).json({ message: 'Imagem salva com sucesso!' });
+  } catch (error) {
+    console.error('Erro ao salvar imagem:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
 });
 
 // Rota para o chat (proteção adicional)

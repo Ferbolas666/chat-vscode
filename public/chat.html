@@ -496,7 +496,7 @@
       <button>
         <i class="far fa-smile"></i>
       </button>
-      <button>
+      <button id="btn-attach">
         <i class="fas fa-paperclip"></i>
       </button>
       <input type="text" placeholder="Digite uma mensagem">
@@ -856,6 +856,150 @@ async function enviarMensagem() {
         console.error('Erro ao enviar mensagem:', error);
     }
 }
+
+// Adicionar input oculto para seleção de arquivos
+const imageInput = document.createElement('input');
+imageInput.type = 'file';
+imageInput.accept = 'image/*';
+imageInput.style.display = 'none';
+document.body.appendChild(imageInput);
+
+// Adicionar evento de clique ao botão do paperclip
+document.getElementById('btn-attach').addEventListener('click', function() {
+    imageInput.click();
+});
+
+// Evento quando uma imagem é selecionada
+imageInput.addEventListener('change', function(e) {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        
+        // Verificar se é uma imagem
+        if (!file.type.match('image.*')) {
+            alert('Por favor, selecione apenas imagens.');
+            return;
+        }
+        
+        // Criar uma visualização da imagem no chat
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            // Adicionar a imagem ao chat
+            adicionarImagemAoChat(e.target.result, true);
+        };
+        reader.readAsDataURL(file);
+        
+        // Enviar para o servidor - CORREÇÃO AQUI
+        const formData = new FormData();
+        formData.append('imagem', file);
+        formData.append('cod_usuario', usuarioLogado.id);
+        formData.append('cod_destinatario', destino);
+        formData.append('usuario', usuarioLogado.nome);
+        formData.append('mensagem', ''); // Mensagem opcional
+        
+        fetch('/upload-imagem', {
+            method: 'POST',
+            body: formData
+            // NÃO adicionar headers - o browser vai definir automaticamente
+            // para multipart/form-data com o boundary correto
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Imagem enviada com sucesso:', data);
+        })
+        .catch(error => {
+            console.error('Erro ao enviar imagem:', error);
+        });
+    }
+});
+
+// Função para adicionar imagem ao chat
+function adicionarImagemAoChat(src, isOwn) {
+    const chatMessages = document.querySelector('.chat-messages');
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
+    
+    const imgContainer = document.createElement('div');
+    imgContainer.className = 'message-bubble';
+    imgContainer.style.padding = '5px';
+    imgContainer.style.background = 'transparent';
+    
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.maxWidth = '200px';
+    img.style.maxHeight = '200px';
+    img.style.borderRadius = '8px';
+    img.style.cursor = 'pointer';
+    
+    // Adicionar evento de clique para maximizar a imagem
+    img.addEventListener('click', function() {
+        maximizarImagem(src);
+    });
+    
+    const time = document.createElement('div');
+    time.className = 'message-time';
+    time.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    imgContainer.appendChild(img);
+    messageDiv.appendChild(imgContainer);
+    messageDiv.appendChild(time);
+    
+    chatMessages.appendChild(messageDiv);
+    
+    // Rolagem para a última mensagem
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Função para maximizar a imagem
+function maximizarImagem(src) {
+    // Criar overlay para a imagem maximizada
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+    overlay.style.display = 'flex';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.style.zIndex = '1000';
+    overlay.style.cursor = 'pointer';
+    
+    // Criar elemento de imagem maximizada
+    const imgMaximizada = document.createElement('img');
+    imgMaximizada.src = src;
+    imgMaximizada.style.maxWidth = '90%';
+    imgMaximizada.style.maxHeight = '90%';
+    imgMaximizada.style.objectFit = 'contain';
+    
+    // Adicionar evento para fechar ao clicar no overlay
+    overlay.addEventListener('click', function() {
+        document.body.removeChild(overlay);
+    });
+    
+    // Adicionar imagem ao overlay e overlay ao body
+    overlay.appendChild(imgMaximizada);
+    document.body.appendChild(overlay);
+    
+    // Prevenir que o clique na imagem feche o overlay
+    imgMaximizada.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+}
+
+// Adicionar estilos CSS para a imagem maximizada
+const style = document.createElement('style');
+style.textContent = `
+    .message-bubble img {
+        transition: transform 0.2s;
+    }
+    
+    .message-bubble img:hover {
+        transform: scale(1.05);
+    }
+`;
+document.head.appendChild(style);
 
 // Configurar eventos
 function configurarEventos() {
