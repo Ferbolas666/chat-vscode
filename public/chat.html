@@ -642,12 +642,61 @@
     <button class="modal-btn" id="resetZoom">Reset</button>
   </div>
 </div>
-
+<script src="/socket.io/socket.io.js"></script>
 <script>
 // Variáveis globais
 let nivelAtual = '';
 let usuarioLogado = {};
 let destino = ''; // Variável para armazenar o destinatário atual
+
+// Conexão com o servidor via socket.io
+const socket = io();
+
+// Escuta novas mensagens em tempo real
+socket.on("novaMensagem", (msg) => {
+    console.log("Mensagem recebida em tempo real:", msg);
+
+    // Adapta o formato para bater com seu renderizarMensagens
+    const mensagens = [{
+        is_own: msg.cod_usuario === usuarioLogado.id,
+        tipo: "texto", // por enquanto só texto
+        conteudo: msg.mensagem,
+        data_envio: msg.data_envio
+    }];
+
+    // Adiciona na tela sem precisar recarregar tudo
+    renderizarMensagensIncremental(mensagens);
+});
+
+function renderizarMensagensIncremental(novasMensagens) {
+    const chatMessages = document.querySelector('.chat-messages');
+
+    novasMensagens.forEach(msg => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${msg.is_own ? 'own-message' : 'other-message'}`;
+
+        if (msg.tipo === 'texto') {
+            messageDiv.innerHTML = `
+                <div class="message-content">${msg.conteudo}</div>
+                <div class="message-time">${formatarData(msg.data_envio)}</div>
+            `;
+        } else if (msg.tipo === 'imagem' && msg.conteudo) {
+            const imageUrl = bufferToDataUrl(msg.conteudo) || '#';
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <img src="${imageUrl}" alt="Imagem enviada" class="chat-image">
+                </div>
+                <div class="message-time">${formatarData(msg.data_envio)}</div>
+            `;
+        }
+
+        chatMessages.appendChild(messageDiv);
+    });
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    adicionarEventosZoom();
+}
+
 
 // Função para carregar informações do usuário logado
 async function carregarUsuarioLogado() {

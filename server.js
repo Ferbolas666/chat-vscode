@@ -6,6 +6,11 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const app = express();
+const http = require("http");
+const { Server } = require("socket.io");
+
+const server = http.createServer(app);
+const io = new Server(server);
 // Configure o multer corretamente
 const multer = require('multer');
 const upload = multer({
@@ -573,9 +578,17 @@ app.post('/api/enviar', requireAuth, async (req, res) => {
                     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                 `, [usuario_logado, codFuncionario, req.session.usuario_nome, mensagemCriptografada]);
 
+                // 🔥 AQUI O SOCKET.IO ENTRA
+                io.emit("novaMensagem", {
+                    usuario: req.session.usuario_nome,
+                    mensagem: mensagem, // mensagem original (não criptografada) pro front exibir
+                    dest: codFuncionario,
+                    data_envio: new Date()
+                });
+
                 res.json({ 
                     success: true, 
-                    message: 'Mensagem enviada e replicada no Postgres com sucesso' 
+                    message: 'Mensagem enviada, replicada no Postgres e emitida via socket'
                 });
             } catch (errPG) {
                 console.error('Erro ao salvar no Postgres:', errPG);
@@ -707,7 +720,7 @@ app.get('/', (req, res) => {
 });
 
 // Iniciar servidor
-app.listen(3000, () => {
+server.listen(3000, () => {
     console.log('Servidor rodando na porta 3000');
     console.log('Acesse: http://localhost:3000');
 });
