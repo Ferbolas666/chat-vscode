@@ -622,6 +622,81 @@ app.get('/chat.html', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'chat.html'));
 });
 
+// Nova API para obter conversas ativas
+app.get('/api/conversas-ativas', requireAuth, (req, res) => {
+    const usuario_logado = req.session.usuario_logado;
+    
+    Firebird.attach(dbOptions, (err, db) => {
+        if (err) {
+            console.error('Erro ao conectar ao banco:', err);
+            return res.status(500).json({ error: 'Erro no servidor' });
+        }
+
+        // Buscar usuários com quem o usuário logado trocou mensagens
+        const query = `
+            SELECT DISTINCT 
+                CASE 
+                    WHEN m.cod_usuario = ? THEN m.cod_destinatario
+                    ELSE m.cod_usuario
+                END as cod_contato
+            FROM chat_mensagens m
+            WHERE m.cod_usuario = ? OR m.cod_destinatario = ?
+        `;
+        
+        db.query(query, [usuario_logado, usuario_logado, usuario_logado], (err, result) => {
+            if (err) {
+                db.detach();
+                console.error('Erro ao buscar conversas ativas:', err);
+                return res.status(500).json({ error: 'Erro no servidor' });
+            }
+            
+            if (result.length === 0) {
+                db.detach();
+                return res.json([]);
+            }
+            
+            // Buscar informações dos contatos das conversas
+            const codigosContatos = result.map(row => row.COD_CONTATO);
+            const placeholders = codigosContatos.map(() => '?').join(',');
+            
+            const queryContatos = `
+                SELECT f.cod_funcionario, f.nome, n.nivel
+                FROM FUNCIONARIOS f
+                INNER JOIN NIVEL_USUARIO n ON f.cod_nivel = n.cod_nivel
+                WHERE f.cod_funcionario IN (${placeholders})
+            `;
+            
+            db.query(queryContatos, codigosContatos, (err, resultContatos) => {
+                db.detach();
+                
+                if (err) {
+                    console.error('Erro ao buscar informações dos contatos:', err);
+                    return res.status(500).json({ error: 'Erro no servidor' });
+                }
+                
+                const contatos = resultContatos.map(row => {
+                    const iniciais = row.NOME.split(' ')
+                        .map(nome => nome[0])
+                        .join('')
+                        .toUpperCase()
+                        .substring(0, 2);
+                    
+                    return {
+                        id: row.COD_FUNCIONARIO,
+                        nome: row.NOME,
+                        nivel: row.NIVEL,
+                        avatar: iniciais,
+                        status: 'Online',
+                        is_conversa: true // Flag para identificar que é uma conversa ativa
+                    };
+                });
+                
+                res.json(contatos);
+            });
+        });
+    });
+});
+
 // Rota padrão - redireciona para login
 app.get('/', (req, res) => {
     if (req.session.usuario_logado) {

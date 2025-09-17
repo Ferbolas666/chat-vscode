@@ -530,6 +530,20 @@
         position: static;
         font-size: 24px;
     }
+
+    .contact-item.conversa-ativa {
+    border-left: 4px solid #0084ff;
+    background-color: #f0f8ff;
+}
+
+.conversa-badge {
+    background-color: #0084ff;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    margin-left: 5px;
+}
 </style>
 </head>
 <body>
@@ -815,29 +829,6 @@ function renderizarBotoesNiveis(niveis) {
     });
 }
 
-// Função para carregar contatos com base no nível selecionado
-async function carregarContatos(nivelId) {
-    const contactsList = document.querySelector('.contacts-list');
-    
-    // Mostrar loading
-    contactsList.innerHTML = '<div class="loading">Carregando contatos...</div>';
-    
-    try {
-        const response = await fetch(`/api/contatos?nivel=${nivelId}`);
-        
-        if (response.ok) {
-            const contatos = await response.json();
-            renderizarContatos(contatos, nivelId);
-        } else {
-            console.error('Erro ao carregar contatos da API');
-            contactsList.innerHTML = '<div class="error">Erro ao carregar contatos</div>';
-        }
-    } catch (error) {
-        console.error('Erro ao carregar contatos:', error);
-        contactsList.innerHTML = '<div class="error">Erro de conexão</div>';
-    }
-}
-
 // Função para renderizar os contatos na lista
 function renderizarContatos(contatos, nivelId) {
     const contactsList = document.querySelector('.contacts-list');
@@ -854,30 +845,109 @@ function renderizarContatos(contatos, nivelId) {
     contactsList.innerHTML = '';
     
     if (contatos.length === 0) {
-        contactsList.innerHTML = '<div class="empty">Nenhum usuário encontrado neste nível</div>';
+        contactsList.innerHTML = '<div class="empty">Nenhum usuário encontrado</div>';
         return;
     }
     
+    // Separar contatos normais de conversas ativas
+    const contatosNormais = contatos.filter(c => !c.is_conversa);
+    const conversasAtivas = contatos.filter(c => c.is_conversa);
+    
     // Adicionar cada contato à lista
-    contatos.forEach(contato => {
-        const contactItem = document.createElement('div');
-        contactItem.className = 'contact-item';
-        contactItem.dataset.id = contato.id;
+    contatosNormais.forEach(contato => {
+        adicionarContatoNaLista(contato, false);
+    });
+    
+    // Adicionar conversas ativas (se houver)
+    if (conversasAtivas.length > 0) {
+        const separator = document.createElement('div');
+        separator.className = 'contacts-separator';
+        separator.textContent = 'Conversas ativas';
+        contactsList.appendChild(separator);
         
-        contactItem.innerHTML = `
-            <div class="contact-avatar">${contato.avatar}</div>
-            <div class="contact-info">
-                <div class="contact-name">${contato.nome}</div>
-                <div class="contact-status">${contato.status} • ${contato.nivel}</div>
+        conversasAtivas.forEach(contato => {
+            adicionarContatoNaLista(contato, true);
+        });
+    }
+}
+
+// Função auxiliar para adicionar contato à lista
+function adicionarContatoNaLista(contato, isConversaAtiva) {
+    const contactsList = document.querySelector('.contacts-list');
+    const contactItem = document.createElement('div');
+    
+    contactItem.className = `contact-item ${isConversaAtiva ? 'conversa-ativa' : ''}`;
+    contactItem.dataset.id = contato.id;
+    
+    contactItem.innerHTML = `
+        <div class="contact-avatar">${contato.avatar}</div>
+        <div class="contact-info">
+            <div class="contact-name">
+                ${contato.nome}
+                ${isConversaAtiva ? '<span class="conversa-badge">Conversa</span>' : ''}
             </div>
-        `;
+            <div class="contact-status">${contato.status} • ${contato.nivel}</div>
+        </div>
+    `;
+    
+    contactItem.addEventListener('click', () => {
+        abrirChat(contato);
+    });
+    
+    contactsList.appendChild(contactItem);
+}
+
+// Nova função para carregar conversas ativas (usuários que trocaram mensagens)
+async function carregarConversasAtivas() {
+    try {
+        const response = await fetch('/api/conversas-ativas');
+        if (response.ok) {
+            return await response.json();
+        }
+        return [];
+    } catch (error) {
+        console.error('Erro ao carregar conversas ativas:', error);
+        return [];
+    }
+}
+
+// Função modificada para carregar contatos E conversas ativas
+async function carregarContatos(nivelId) {
+    const contactsList = document.querySelector('.contacts-list');
+    
+    // Mostrar loading
+    contactsList.innerHTML = '<div class="loading">Carregando contatos...</div>';
+    
+    try {
+        // Carregar contatos do nível selecionado
+        const [responseContatos, conversasAtivas] = await Promise.all([
+            fetch(`/api/contatos?nivel=${nivelId}`),
+            carregarConversasAtivas()
+        ]);
         
-        contactItem.addEventListener('click', () => {
-            abrirChat(contato);
+        let contatos = [];
+        
+        if (responseContatos.ok) {
+            contatos = await responseContatos.json();
+        } else {
+            console.error('Erro ao carregar contatos da API');
+        }
+        
+        // Combinar contatos com conversas ativas (removendo duplicatas)
+        const todosContatos = [...contatos];
+        const idsExistentes = new Set(contatos.map(c => c.id));
+        
+        conversasAtivas.forEach(contato => {
+            if (!idsExistentes.has(contato.id)) {
+                todosContatos.push(contato);
+            }
         });
         
-        contactsList.appendChild(contactItem);
-    });
+        renderizarContatos(todosContatos, nivelId);
+    } catch (error) {
+        console.error('Erro ao carregar contatos:', error);
+        contactsList.innerHTML = '<div class="error">Erro de conexão</div>';
+    }
 }
 
 // Função para abrir o chat com um contato
