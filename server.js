@@ -601,7 +601,6 @@ app.post('/api/enviar', requireAuth, async (req, res) => {
 // Rota para upload de imagem
 app.post('/upload-imagem', upload.single('imagem'), async (req, res) => {
   try {
-    // Verifique se o arquivo foi recebido
     if (!req.file) {
       return res.status(400).json({ error: 'Nenhuma imagem enviada' });
     }
@@ -609,21 +608,36 @@ app.post('/upload-imagem', upload.single('imagem'), async (req, res) => {
     const { cod_usuario, cod_destinatario, usuario, mensagem } = req.body;
     const imagem = req.file.buffer;
 
+    // Salvar no Postgres
     const query = `
       INSERT INTO chat_mensagens 
         (cod_usuario, cod_destinatario, usuario, mensagem, data_envio, arquivo)
       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
+      RETURNING data_envio
     `;
 
-    await pgPool.query(query, [
+    const result = await pgPool.query(query, [
       cod_usuario,
       cod_destinatario,
       usuario,
-      mensagem,
+      mensagem || '', // pode ser vazio
       imagem
     ]);
 
-    res.status(200).json({ message: 'Imagem salva com sucesso!' });
+    const data_envio = result.rows[0].data_envio;
+
+    // 🔥 Emitir em tempo real pelo socket
+    io.emit("nova_imagem", {
+      buffer: imagem.toString("base64"), // transforma em Base64
+      usuario,
+      cod_usuario,
+      dest: cod_destinatario,
+      data_envio,
+      isOwn: false // o front decide se é dele ou não
+    });
+
+    res.status(200).json({ message: 'Imagem salva e emitida em tempo real!' });
+
   } catch (error) {
     console.error('Erro ao salvar imagem:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });

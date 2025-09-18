@@ -240,6 +240,11 @@
     transition: transform 0.3s ease;
   }
   
+  /* Garante que a bolha apareça somente com conteúdo */
+.message-content:empty {
+    display: none; /* NÃO mostra bolha vazia */
+}
+
   .chat-container.active {
     transform: translateX(0);
   }
@@ -281,13 +286,52 @@
   }
   
   .chat-messages {
-    flex: 1;
-    padding: 16px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-  }
-  
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;            /* <<< faz ocupar o espaço todo */
+  max-height: none;   /* <<< remove a trava de altura */
+}
+
+/* Mensagem enviada pelo usuário logado */
+.message.own-message {
+  align-self: flex-end;
+  background: #ADD8E6; /* verde claro tipo WhatsApp */
+  color: #000;
+  border-radius: 18px 18px 0 18px;
+  padding: 8px 12px;
+  max-width: 70%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Esconde bolhas vazias */
+.message.own-message:empty {
+  display: none;
+}
+
+
+/* Mensagem recebida */
+.message.other-message {
+  align-self: flex-start;
+  background: #FFF;
+  color: #000;
+  border-radius: 18px 18px 18px 0;
+  padding: 8px 12px;
+  max-width: 70%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.message.other-message:empty {
+    display: none;
+}
+
+/* Texto e imagens dentro da mensagem */
+.message-content {
+  word-wrap: break-word;
+}
+
   .message {
     margin-bottom: 15px;
     max-width: 85%;
@@ -321,12 +365,13 @@
     box-shadow: 0 1px 1px rgba(0,0,0,0.1);
   }
   
-  .message-time {
-    font-size: 11px;
-    color: #666;
-    margin-top: 4px;
-    align-self: flex-end;
-  }
+/* Hora */
+.message-time {
+  font-size: 11px;
+  color: #555;
+  margin-top: 3px;
+  text-align: right;
+}
   
   .chat-input {
     display: flex;
@@ -487,11 +532,10 @@
     }
     
     .chat-image {
-        max-width: 200px;
-        border-radius: 12px;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
+  max-width: 200px;
+  border-radius: 12px;
+  margin-top: 5px;
+}
     
     .chat-image:hover {
         transform: scale(1.02);
@@ -652,26 +696,56 @@ let destino = ''; // Variável para armazenar o destinatário atual
 // Conexão com o servidor via socket.io
 const socket = io();
 
-// Escuta novas mensagens em tempo real
+// Escuta novas mensagens de texto em tempo real
 socket.on("novaMensagem", (msg) => {
     console.log("Mensagem recebida em tempo real:", msg);
 
-    // Adapta o formato para bater com seu renderizarMensagens
     const mensagens = [{
         is_own: msg.cod_usuario === usuarioLogado.id,
-        tipo: "texto", // por enquanto só texto
+        tipo: "texto",
         conteudo: msg.mensagem,
         data_envio: msg.data_envio
     }];
 
-    // Adiciona na tela sem precisar recarregar tudo
     renderizarMensagensIncremental(mensagens);
+
+    if (document.hidden && Notification.permission === "granted") {
+        new Notification("💬 Nova mensagem", {
+            body: msg.mensagem,
+            icon: "/img/chat-icon.png"
+        });
+    }
+});
+
+socket.on("nova_imagem", (msg) => {
+    console.log(">>> Socket: nova_imagem recebida", msg.cod_usuario, msg.data_envio);
+
+    // 🔹 Ignora a própria imagem enviada
+    if (msg.cod_usuario === usuarioLogado.id) return;
+
+    const mensagens = [{
+        is_own: false,
+        tipo: "imagem",
+        conteudo: `data:image/png;base64,${msg.buffer}`,
+        data_envio: msg.data_envio
+    }];
+
+    renderizarMensagensIncremental(mensagens);
+
+    if (document.hidden && Notification.permission === "granted") {
+        new Notification("🖼️ Nova imagem", {
+            body: "Você recebeu uma nova imagem",
+            icon: "/img/chat-icon.png"
+        });
+    }
 });
 
 function renderizarMensagensIncremental(novasMensagens) {
     const chatMessages = document.querySelector('.chat-messages');
 
     novasMensagens.forEach(msg => {
+        console.log(">>> renderizando mensagem:", msg.is_own ? 'próprio' : 'outro', msg.tipo, msg.data_envio);
+
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${msg.is_own ? 'own-message' : 'other-message'}`;
 
@@ -681,13 +755,34 @@ function renderizarMensagensIncremental(novasMensagens) {
                 <div class="message-time">${formatarData(msg.data_envio)}</div>
             `;
         } else if (msg.tipo === 'imagem' && msg.conteudo) {
-            const imageUrl = bufferToDataUrl(msg.conteudo) || '#';
-            messageDiv.innerHTML = `
-                <div class="message-content">
-                    <img src="${imageUrl}" alt="Imagem enviada" class="chat-image">
-                </div>
-                <div class="message-time">${formatarData(msg.data_envio)}</div>
-            `;
+            console.log(">>> renderizando imagem base64 (início):", msg.conteudo.slice(0, 50));
+
+            const img = new Image();
+            img.src = msg.conteudo; // já vem em data:image/png;base64,...
+            img.className = 'chat-image';
+
+            // só mostra depois de carregar
+            img.onload = () => {
+                img.style.opacity = "1";
+            };
+
+            img.onerror = () => {
+                const erro = document.createElement("div");
+                erro.className = "image-error";
+                erro.textContent = "❌ Erro ao carregar imagem";
+                img.replaceWith(erro);
+            };
+
+            const imgContainer = document.createElement('div');
+            imgContainer.className = 'message-content';
+            imgContainer.appendChild(img);
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = formatarData(msg.data_envio);
+
+            messageDiv.appendChild(imgContainer);
+            messageDiv.appendChild(timeDiv);
         }
 
         chatMessages.appendChild(messageDiv);
@@ -697,7 +792,12 @@ function renderizarMensagensIncremental(novasMensagens) {
     adicionarEventosZoom();
 }
 
-
+// Pedir permissão para mostrar notificações
+if ("Notification" in window) {
+    Notification.requestPermission().then(permission => {
+        console.log("Permissão de notificação:", permission);
+    });
+}
 // Função para carregar informações do usuário logado
 async function carregarUsuarioLogado() {
     try {
@@ -1420,16 +1520,16 @@ imageInput.addEventListener('change', function(e) {
 });
 
 // Função para adicionar imagem ao chat
-function adicionarImagemAoChat(src, isOwn) {
+/*function adicionarImagemAoChat(src, isOwn) {
     const chatMessages = document.querySelector('.chat-messages');
     
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isOwn ? 'sent' : 'received'}`;
     
     const imgContainer = document.createElement('div');
-    imgContainer.className = 'message-bubble';
-    imgContainer.style.padding = '5px';
-    imgContainer.style.background = 'transparent';
+    //imgContainer.className = 'message-bubble';
+    //imgContainer.style.padding = '5px';
+    //imgContainer.style.background = 'transparent';
     
     const img = document.createElement('img');
     img.src = src;
@@ -1455,7 +1555,7 @@ function adicionarImagemAoChat(src, isOwn) {
     
     // Rolagem para a última mensagem
     chatMessages.scrollTop = chatMessages.scrollHeight;
-}
+}*/
 
 // Função para maximizar a imagem
 function maximizarImagem(src) {
