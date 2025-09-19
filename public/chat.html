@@ -717,14 +717,15 @@ socket.on("novaMensagem", (msg) => {
     }
 });
 
+// 🔥 Escuta novas imagens em tempo real
 socket.on("nova_imagem", (msg) => {
-    console.log(">>> Socket: nova_imagem recebida", msg.cod_usuario, msg.data_envio);
+    console.log("Imagem recebida em tempo real:", msg);
 
-    // 🔹 Ignora a própria imagem enviada
-    if (msg.cod_usuario === usuarioLogado.id) return;
+    // Determina aqui se a mensagem é do próprio usuário (convertendo para número)
+    const isOwn = Number(msg.cod_usuario) === Number(usuarioLogado.id);
 
     const mensagens = [{
-        is_own: false,
+        is_own: isOwn,
         tipo: "imagem",
         conteudo: `data:image/png;base64,${msg.buffer}`,
         data_envio: msg.data_envio

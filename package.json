@@ -2,16 +2,27 @@
   "name": "chat-vscode",
   "version": "1.0.0",
   "main": "server.js",
+  "bin": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "pkg . --targets node18-win-x64 --output chat.exe"
   },
   "dependencies": {
     "express": "^4.21.2",
     "express-session": "^1.17.3",
     "multer": "^2.0.2",
     "node-firebird": "^1.0.0",
+    "open": "^10.2.0",
     "pg": "^8.16.3",
     "socket.io": "^4.8.1"
+  },
+  "pkg": {
+    "scripts": [
+      "server.js"
+    ],
+    "assets": [
+      "public/**/*"
+    ]
   }
 }

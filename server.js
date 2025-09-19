@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const app = express();
 const http = require("http");
 const { Server } = require("socket.io");
-
+const { exec } = require('child_process');
 const server = http.createServer(app);
 const io = new Server(server);
 // Configure o multer corretamente
@@ -23,15 +23,22 @@ const upload = multer({
 const CRYPTO_KEY = crypto.scryptSync('minha-chave-super-secreta-chat-app-2024', 'salt', 32);
 const ALGORITHM = 'aes-256-cbc';
 
-// Configuração do PostgreSQL - Adicione este bloco
+// Substitua [YOUR-PASSWORD] pela senha real
 const pgPool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'chat_imagens',
-  password: 'senha4253',
-  port: 5432,
+  connectionString: 'postgresql://postgres.mqivfcwtcylevmxhlioj:senha4253@aws-1-sa-east-1.pooler.supabase.com:5432/postgres',
+  ssl: {
+    rejectUnauthorized: false // necessário pro Supabase
+  }
 });
 
+// Testar conexão
+pgPool.connect((err, client, release) => {
+  if (err) {
+    return console.error('Erro ao conectar no Postgres:', err.stack);
+  }
+  console.log('Conectado ao Postgres Supabase com sucesso!');
+  release();
+});
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(session({ 
@@ -393,7 +400,7 @@ app.get('/api/niveis-com-usuarios', requireAuth, (req, res) => {
             INNER JOIN FUNCIONARIOS f ON n.cod_nivel = f.cod_nivel
             ORDER BY n.cod_nivel
         `;
-        
+
         db.query(query, (err, result) => {
             db.detach();
             
@@ -608,11 +615,12 @@ app.post('/upload-imagem', upload.single('imagem'), async (req, res) => {
     const { cod_usuario, cod_destinatario, usuario, mensagem } = req.body;
     const imagem = req.file.buffer;
 
-    // Salvar no Postgres
+    // Salvar no Postgres com hora atual no servidor
+    const data_envio = new Date(); // Garante hora correta mesmo que o DB não tenha timezone correto
     const query = `
       INSERT INTO chat_mensagens 
         (cod_usuario, cod_destinatario, usuario, mensagem, data_envio, arquivo)
-      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING data_envio
     `;
 
@@ -620,20 +628,18 @@ app.post('/upload-imagem', upload.single('imagem'), async (req, res) => {
       cod_usuario,
       cod_destinatario,
       usuario,
-      mensagem || '', // pode ser vazio
+      mensagem || '',
+      data_envio,
       imagem
     ]);
 
-    const data_envio = result.rows[0].data_envio;
-
     // 🔥 Emitir em tempo real pelo socket
     io.emit("nova_imagem", {
-      buffer: imagem.toString("base64"), // transforma em Base64
+      buffer: imagem.toString("base64"),
       usuario,
       cod_usuario,
       dest: cod_destinatario,
-      data_envio,
-      isOwn: false // o front decide se é dele ou não
+      data_envio: result.rows[0].data_envio
     });
 
     res.status(200).json({ message: 'Imagem salva e emitida em tempo real!' });
@@ -737,4 +743,7 @@ app.get('/', (req, res) => {
 server.listen(3000, () => {
     console.log('Servidor rodando na porta 3000');
     console.log('Acesse: http://localhost:3000');
+
+    // Abre o navegador no Windows
+    exec('start http://localhost:3000/login');
 });
