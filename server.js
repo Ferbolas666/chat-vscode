@@ -1,37 +1,56 @@
 const express = require('express');
 const session = require('express-session');
 const Firebird = require('node-firebird');
-const { Pool } = require('pg'); // Adicione esta linha para importar o PostgreSQL
+const { Pool } = require('pg');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const app = express();
 const http = require("http");
 const { Server } = require("socket.io");
-const { exec } = require('child_process');
 const server = http.createServer(app);
-const io = new Server(server);
-// Configure o multer corretamente
+
+// Configuração do Socket.io
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true
+});
+
+// Middleware CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+});
+
+// Multer
 const multer = require('multer');
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
+    fileSize: 5 * 1024 * 1024
   }
 });
-// CHAVE SECRETA (em produção, use variáveis de ambiente!)
+
+// Chave de criptografia
 const CRYPTO_KEY = crypto.scryptSync('minha-chave-super-secreta-chat-app-2024', 'salt', 32);
 const ALGORITHM = 'aes-256-cbc';
 
-// Substitua [YOUR-PASSWORD] pela senha real
+// Pool do Postgres
 const pgPool = new Pool({
   connectionString: 'postgresql://postgres.mqivfcwtcylevmxhlioj:senha4253@aws-1-sa-east-1.pooler.supabase.com:5432/postgres',
   ssl: {
-    rejectUnauthorized: false // necessário pro Supabase
+    rejectUnauthorized: false
   }
 });
 
-// Testar conexão
+// Testar conexão Postgres
 pgPool.connect((err, client, release) => {
   if (err) {
     return console.error('Erro ao conectar no Postgres:', err.stack);
@@ -39,6 +58,8 @@ pgPool.connect((err, client, release) => {
   console.log('Conectado ao Postgres Supabase com sucesso!');
   release();
 });
+
+// Configurações do Express
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(session({ 
@@ -49,6 +70,7 @@ app.use(session({
 }));
 app.use(express.static('public'));
 
+// Configuração do Firebird
 const dbOptions = {
     host: 'db-junior-demo.sp1.br.saveincloud.net.br',
     port: 13305,
@@ -59,6 +81,51 @@ const dbOptions = {
     role: null,
     pageSize: 4096
 };
+
+// Socket.io Connection Handling
+io.on('connection', (socket) => {
+    console.log('Usuário conectado:', socket.id);
+
+    socket.on('join', (userData) => {
+        socket.userId = userData.id;
+        console.log(`Usuário ${userData.nome} entrou na sala`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Usuário desconectado:', socket.id);
+    });
+
+    socket.on('error', (error) => {
+        console.error('Erro no socket:', error);
+    });
+});
+
+
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
+const HOST = '0.0.0.0';
+
+server.listen(PORT, HOST, () => {
+    const interfaces = require('os').networkInterfaces();
+    
+    console.log('═'.repeat(50));
+    console.log('🚀 CHAT APP - SERVIDOR INICIADO');
+    console.log('═'.repeat(50));
+    console.log(`📍 Local: http://localhost:${PORT}`);
+    console.log(`🌐 Host: http://${HOST}:${PORT}`);
+    
+    // Mostrar IPs da rede local
+    Object.keys(interfaces).forEach((iface) => {
+        interfaces[iface].forEach((config) => {
+            if (config.family === 'IPv4' && !config.internal) {
+                console.log(`📡 Rede: http://${config.address}:${PORT}`);
+            }
+        });
+    });
+    
+    console.log('═'.repeat(50));
+    console.log('✅ Servidor pronto para conexões');
+});
 
 // FUNÇÃO PARA CRIPTOGRAFAR MENSAGEM COM AES-256-CBC
 function encryptMessage(message) {
@@ -134,7 +201,7 @@ app.get('/login', (req, res) => {
                 options += `<option value="${row.COD_FUNCIONARIO}">${row.NOME}</option>`;
             });
 
-            let html = fs.readFileSync(path.join('public', 'login.html'), 'utf8');
+            let html = fs.readFileSync(path.join(__dirname, 'public', 'login.html'), 'utf8');
             html = html.replace('{{USUARIOS}}', options);
             res.send(html);
         });
@@ -615,12 +682,11 @@ app.post('/upload-imagem', upload.single('imagem'), async (req, res) => {
     const { cod_usuario, cod_destinatario, usuario, mensagem } = req.body;
     const imagem = req.file.buffer;
 
-    // Salvar no Postgres com hora atual no servidor
-    const data_envio = new Date(); // Garante hora correta mesmo que o DB não tenha timezone correto
+    // Salvar no Postgres
     const query = `
       INSERT INTO chat_mensagens 
         (cod_usuario, cod_destinatario, usuario, mensagem, data_envio, arquivo)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
       RETURNING data_envio
     `;
 
@@ -628,18 +694,20 @@ app.post('/upload-imagem', upload.single('imagem'), async (req, res) => {
       cod_usuario,
       cod_destinatario,
       usuario,
-      mensagem || '',
-      data_envio,
+      mensagem || '', // pode ser vazio
       imagem
     ]);
 
+    const data_envio = result.rows[0].data_envio;
+
     // 🔥 Emitir em tempo real pelo socket
     io.emit("nova_imagem", {
-      buffer: imagem.toString("base64"),
+      buffer: imagem.toString("base64"), // transforma em Base64
       usuario,
       cod_usuario,
       dest: cod_destinatario,
-      data_envio: result.rows[0].data_envio
+      data_envio,
+      //isOwn: false // o front decide se é dele ou não
     });
 
     res.status(200).json({ message: 'Imagem salva e emitida em tempo real!' });
@@ -739,11 +807,6 @@ app.get('/', (req, res) => {
     }
 });
 
-// Iniciar servidor
-server.listen(3000, () => {
+server.listen(3000, '0.0.0.0', () => {
     console.log('Servidor rodando na porta 3000');
-    console.log('Acesse: http://localhost:3000');
-
-    // Abre o navegador no Windows
-    exec('start http://localhost:3000/login');
 });

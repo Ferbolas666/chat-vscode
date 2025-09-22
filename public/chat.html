@@ -687,15 +687,43 @@
   </div>
 </div>
 <script src="/socket.io/socket.io.js"></script>
+<script src="client.js"></script>
 <script>
 // Variáveis globais
 let nivelAtual = '';
 let usuarioLogado = {};
 let destino = ''; // Variável para armazenar o destinatário atual
+// Conexão Socket.io - SIMPLES E DIRETA
+const socket = io({
+    transports: ['websocket', 'polling']
+});
 
-// Conexão com o servidor via socket.io
-const socket = io();
+// Eventos básicos do Socket
+socket.on('connect', () => {
+    console.log('✅ CONECTADO AO SERVIDOR');
+    console.log('Socket ID:', socket.id);
+});
 
+socket.on('disconnect', () => {
+    console.log('❌ DESCONECTADO');
+});
+
+socket.on('connect_error', (error) => {
+    console.error('💥 ERRO NA CONEXÃO:', error);
+});
+
+// Escutar mensagens de texto
+socket.on('novaMensagem', (data) => {
+    console.log('📨 MENSAGEM RECEBIDA:', data);
+});
+
+// Escutar imagens
+socket.on('nova_imagem', (data) => {
+    console.log('🖼️ IMAGEM RECEBIDA:', data);
+});
+
+// Para testar manualmente no console
+window.socket = socket;
 // Escuta novas mensagens de texto em tempo real
 socket.on("novaMensagem", (msg) => {
     console.log("Mensagem recebida em tempo real:", msg);
