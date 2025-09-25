@@ -86,11 +86,32 @@ const dbOptions = {
 io.on('connection', (socket) => {
     console.log('Usuário conectado:', socket.id);
 
+    // ---------------------------
+    // LOGIN / ENTRAR NA SALA
+    // ---------------------------
     socket.on('join', (userData) => {
         socket.userId = userData.id;
         console.log(`Usuário ${userData.nome} entrou na sala`);
     });
 
+    // ---------------------------
+    // WEBRTC (sinalização de chamadas)
+    // ---------------------------
+    socket.on('offer', (data) => {
+        socket.to(data.to).emit('offer', { from: socket.id, offer: data.offer });
+    });
+
+    socket.on('answer', (data) => {
+        socket.to(data.to).emit('answer', { from: socket.id, answer: data.answer });
+    });
+
+    socket.on('ice-candidate', (data) => {
+        socket.to(data.to).emit('ice-candidate', { from: socket.id, candidate: data.candidate });
+    });
+
+    // ---------------------------
+    // DESCONECTAR / ERROS
+    // ---------------------------
     socket.on('disconnect', () => {
         console.log('Usuário desconectado:', socket.id);
     });
@@ -99,7 +120,6 @@ io.on('connection', (socket) => {
         console.error('Erro no socket:', error);
     });
 });
-
 
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
@@ -422,7 +442,7 @@ app.get('/api/contatos', requireAuth, (req, res) => {
                 
                 db.query(query, [nivel], (err, result) => {
                     db.detach();
-                    
+
                     if (err) {
                         console.error('Erro na consulta de contatos:', err);
                         return res.status(500).json({ error: 'Erro no servidor' });

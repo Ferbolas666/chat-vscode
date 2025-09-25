@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function escapeHtml(unsafe) {
         return unsafe.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
     }
-
+    
     // Eventos do servidor
     socket.on('systemMessage', (txt) => appendSystem(txt));
     socket.on('chatMessage', (payload) => appendMessage(payload));

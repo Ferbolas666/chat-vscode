@@ -373,48 +373,72 @@
   text-align: right;
 }
   
+.chat-input {
+  display: flex;
+  padding: 12px;
+  background-color: white;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.chat-input input {
+  flex: 1;
+  min-width: 0;              /* 🔑 evita estourar no mobile */
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 25px;
+  outline: none;
+  font-size: 15px;
+}
+
+.chat-input input:focus {
+  border-color: var(--light-blue);
+}
+
+.chat-input button {
+  width: 44px;               /* 🔑 mais confortável no celular */
+  height: 44px;
+  border-radius: 50%;
+  background-color: var(--primary-blue);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background-color 0.2s;
+  flex-shrink: 0;             /* 🔑 impede que o botão diminua */
+}
+
+.chat-input button:hover {
+  background-color: var(--dark-blue);
+}
+
+/* Ajustes extras para telas muito pequenas */
+@media (max-width: 480px) {
   .chat-input {
-    display: flex;
-    padding: 12px;
-    background-color: white;
-    align-items: center;
-    gap: 8px;
-    border-top: 1px solid #e0e0e0;
+    padding: 8px 10px;
+    gap: 6px;
   }
-  
   .chat-input input {
-    flex: 1;
-    padding: 12px 16px;
-    border: 1px solid #e0e0e0;
-    border-radius: 25px;
-    outline: none;
-    font-size: 15px;
+    padding: 10px 14px;
+    font-size: 14px;
   }
-  
-  .chat-input input:focus {
-    border-color: var(--light-blue);
-  }
-  
   .chat-input button {
     width: 40px;
     height: 40px;
-    border-radius: 50%;
-    background-color: var(--primary-blue);
-    color: white;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     font-size: 16px;
-    transition: background-color 0.2s;
-    flex-shrink: 0;
   }
-  
-  .chat-input button:hover {
-    background-color: var(--dark-blue);
-  }
-  
+}
+
+  #emoji-picker {
+  position: absolute;
+  display: none; /* começa escondido */
+  z-index: 1000;
+}
+
   /* Para desktop */
   @media (min-width: 768px) {
     .app-container {
@@ -654,9 +678,9 @@
     </div>
     
     <div class="chat-input">
-      <button>
-        <i class="far fa-smile"></i>
-      </button>
+        <button id="btn-emoji">
+            <i class="fas fa-smile"></i>
+        </button>
       <button id="btn-attach">
         <i class="fas fa-paperclip"></i>
       </button>
@@ -665,6 +689,8 @@
         <i class="fas fa-paper-plane"></i>
       </button>
     </div>
+    <!-- Popup escondido -->
+    <emoji-picker id="emoji-picker" style="position:absolute; bottom:60px; left:20px; display:none;"></emoji-picker>
   </div>
 </div>
 
@@ -686,6 +712,8 @@
     <button class="modal-btn" id="resetZoom">Reset</button>
   </div>
 </div>
+
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="client.js"></script>
 <script>
@@ -1650,6 +1678,60 @@ function configurarEventos() {
             enviarMensagem();
         }
     });
+}
+
+async function getLocalStream() {
+    try {
+        const stream = await navigator.medaDevices.getUserMedia({ audio: true });
+        return stream;
+    } catch (err) {
+        console.error("Erro ao acessar microfone:", err);
+        alert("Não foi possível acessar o microfone.");
+        return null;
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const input = document.querySelector('.chat-input input'); // seu input existente
+  const emojiBtn = document.getElementById("btn-emoji");
+  const emojiPicker = document.getElementById("emoji-picker");
+
+  // Abrir/fechar o leque
+  emojiBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    emojiPicker.style.display = emojiPicker.style.display === "none" ? "block" : "none";
+  });
+
+  // Ao clicar no emoji, insere no input
+  emojiPicker.addEventListener("emoji-click", (event) => {
+    input.value += event.detail.unicode;
+    emojiPicker.style.display = "none";
+    input.focus();
+  });
+
+  // Fecha clicando fora
+  document.addEventListener("click", (e) => {
+    if (!emojiPicker.contains(e.target) && !emojiBtn.contains(e.target)) {
+      emojiPicker.style.display = "none";
+    }
+  });
+});
+
+const peerConnection = new RTCPeerConnection();
+
+// Receber áudio remoto
+peerConnection.ontrack = (event) => {
+  const audio = document.createElement("audio");
+  audio.srcObject = event.streams[0];
+  audio.autoplay = true;
+  document.body.appendChild(audio); // ou algum container no chat
+};
+
+async function startCall() {
+  const localStream = await getLocalStream();
+  if (!localStream) return;
+
+  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 }
 
 // Inicialização
