@@ -430,6 +430,24 @@
     width: 40px;
     height: 40px;
     font-size: 16px;
+    
+  }
+
+  /* Faz o conteúdo ocupar a tela inteira e permitir rolagem */
+  .app-content {
+    height: 100vh;          /* ocupa toda a altura da tela do celular */
+    overflow-y: auto;        /* permite rolar */
+    padding: 16px;
+    background-color: #f8f9fa;
+  }
+
+  /* Faz a lista de contatos rolar se tiver muitas */
+  .contacts-list {
+    max-height: calc(100vh - 200px); /* 200px é só um exemplo, subtrai header + user-profile + botões */
+    overflow-y: auto;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   }
 }
 
@@ -900,15 +918,17 @@ async function carregarNiveis() {
             }
             
             renderizarBotoesNiveis(niveis);
-            
-            // Selecionar o primeiro nível por padrão (se existir)
-            if (niveis.length > 0) {
-                const primeiroNivel = niveis[0];
-                const primeiroBotao = document.querySelector(`.level-btn[data-level="${primeiroNivel.cod_nivel}"]`);
-                if (primeiroBotao) {
-                    primeiroBotao.classList.add('active');
-                    carregarContatos(primeiroNivel.cod_nivel);
-                }
+
+            // Seleciona automaticamente o nivel do usuário logado, se existir
+            const nivelUsuario = req.session.usuario_cod_nivel; // ou pegue do JS
+            let nivelParaAtivar = niveis.find(n => n.cod_nivel == nivelUsuario);
+
+            // Se não achar, pega o primeiro nível
+            if (!nivelParaAtivar) nivelParaAtivar = niveis[0];
+
+            if (nivelParaAtivar) {
+              const botao = document.querySelector(`.level-btn[data-level="${nivelParaAtivar.cod_nivel}"]`);
+              if (botao) botao.click(); // ativa
             }
         } else {
             console.error('Erro ao carregar níveis da API, tentando fallback...');

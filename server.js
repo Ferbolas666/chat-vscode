@@ -208,7 +208,7 @@ app.get('/login', (req, res) => {
             return res.status(500).send('Erro no servidor');
         }
 
-        db.query('SELECT cod_funcionario, nome FROM FUNCIONARIOS ORDER BY nome', (err, result) => {
+        db.query('SELECT cod_funcionario, nome FROM FUNCIONARIOS WHERE ATIVO = 1 ORDER BY nome', (err, result) => {
             db.detach();
             
             if (err) {
@@ -472,27 +472,29 @@ app.get('/api/contatos', requireAuth, (req, res) => {
     });
 });
 
-// NOVA API: Obter apenas níveis que possuem usuários
 app.get('/api/niveis-com-usuarios', requireAuth, (req, res) => {
+    const nivelUsuario = req.session.usuario_cod_nivel; // <-- precisa salvar isso no login
+    const niveisPermitidos = [6, nivelUsuario]; // sempre 6 + o nível do usuário
+
     Firebird.attach(dbOptions, (err, db) => {
         if (err) {
             console.error('Erro ao conectar ao banco:', err);
             return res.status(500).json({ error: 'Erro no servidor' });
         }
 
-        // Buscar apenas níveis que possuem pelo menos um usuário
         const query = `
             SELECT DISTINCT n.cod_nivel, n.nivel
             FROM NIVEL_USUARIO n
-            INNER JOIN FUNCIONARIOS f ON n.cod_nivel = f.cod_nivel
+            INNER JOIN FUNCIONARIOS f ON f.cod_nivel = n.cod_nivel
+            WHERE n.cod_nivel IN (?, ?)
             ORDER BY n.cod_nivel
         `;
 
-        db.query(query, (err, result) => {
+        db.query(query, niveisPermitidos, (err, result) => {
             db.detach();
-            
+
             if (err) {
-                console.error('Erro na consulta de níveis com usuários:', err);
+                console.error('Erro na consjulta de niveis com usuários:', err);
                 return res.status(500).json({ error: 'Erro no servidor' });
             }
 
