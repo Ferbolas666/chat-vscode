@@ -630,6 +630,62 @@
     font-size: 10px;
     margin-left: 5px;
 }
+
+/* Tela inicial do chat */
+.chat-empty {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #e0f7ff, #c2f0ff, #a8e8ff); /* degrade clarinho */
+  background-size: 400% 400%;
+  animation: gentleGradient 20s ease infinite;
+  color: #007acc;
+}
+
+.chat-empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  text-align: center;
+}
+
+.chat-empty-content img {
+  max-width: 120px;
+  filter: drop-shadow(0 3px 5px rgba(0,0,0,0.1));
+  animation: floatIcon 4s ease-in-out infinite;
+}
+
+.chat-empty-content h2 {
+  margin: 0;
+  font-size: 24px;
+  color: #007acc;
+}
+
+.chat-empty-content p {
+  margin: 0;
+  font-size: 16px;
+  color: rgba(0, 122, 204, 0.7);
+}
+
+/* Animação suave do degrade de fundo */
+@keyframes gentleGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Animação suave do ícone flutuando */
+@keyframes floatIcon {
+  0%   { transform: translateY(0px); }
+  50%  { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
 </style>
 </head>
 <body>
@@ -667,9 +723,23 @@
       <!-- Contatos serão inseridos aqui via JavaScript -->
     </div>
   </div>
-  
-  <!-- Área de chat (inicialmente oculta em mobile) -->
-  <div class="chat-container">
+
+<!-- Área de chat (inicialmente oculta) -->
+<div class="chat-container">
+
+  <!-- Tela inicial do chat (quando nenhuma conversa está aberta) -->
+  <div class="chat-empty" id="chat-empty">
+    <div class="chat-empty-content">
+      <img src="chat-icone.webp" alt="Chat">
+      <h2>Bem-vindo!</h2>
+      <p>Selecione um contato para começar a conversar</p>
+    </div>
+  </div>
+
+  <!-- Chat real (começa escondido) -->
+  <div class="chat-box" id="chat-box" style="flex:1; display:none; flex-direction:column;">
+    
+    <!-- Cabeçalho do chat -->
     <div class="chat-header">
       <button class="back-button">
         <i class="fas fa-arrow-left"></i>
@@ -677,8 +747,8 @@
       <div style="display: flex; align-items: center;">
         <div class="avatar">M</div>
         <div>
-          <div class="contact-name">Maria Silva</div>
-          <div class="contact-status">Online</div>
+          <div class="contact-name" id="contact-name">Maria Silva</div>
+          <div class="contact-status" id="contact-status">Online</div>
         </div>
       </div>
       <div style="display: flex; gap: 10px;">
@@ -690,15 +760,17 @@
         </button>
       </div>
     </div>
-    
-    <div class="chat-messages">
-      <!-- Mensagens serão inseridas aqui via JavaScript -->
+
+    <!-- Corpo da conversa -->
+    <div class="chat-messages" id="chat-messages">
+      <!-- Mensagens aqui -->
     </div>
-    
+
+    <!-- Input de mensagem -->
     <div class="chat-input">
-        <button id="btn-emoji">
-            <i class="fas fa-smile"></i>
-        </button>
+      <button id="btn-emoji">
+        <i class="fas fa-smile"></i>
+      </button>
       <button id="btn-attach">
         <i class="fas fa-paperclip"></i>
       </button>
@@ -707,7 +779,8 @@
         <i class="fas fa-paper-plane"></i>
       </button>
     </div>
-    <!-- Popup escondido -->
+
+    <!-- Emoji picker -->
     <emoji-picker id="emoji-picker" style="position:absolute; bottom:60px; left:20px; display:none;"></emoji-picker>
   </div>
 </div>
@@ -1178,14 +1251,21 @@ async function carregarContatos(nivelId) {
 
 // Função para abrir o chat com um contato
 function abrirChat(contato) {
-    // Armazenar o destinatário atual
     destino = contato.id;
-    
-    document.querySelector('.chat-container .avatar').textContent = contato.avatar;
-    document.querySelector('.chat-container .contact-name').textContent = contato.nome;
-    document.querySelector('.chat-container .contact-status').textContent = contato.status;
-    
-    carregarMensagens();
+
+    // Esconde a tela inicial
+    document.getElementById('chat-empty').style.display = 'none';
+
+    // Mostra o chat real
+    const chatBox = document.getElementById('chat-box');
+    chatBox.style.display = 'flex';
+
+    // Atualiza cabeçalho
+    document.querySelector('.chat-header .avatar').textContent = contato.avatar;
+    document.getElementById('contact-name').textContent = contato.nome;
+    document.getElementById('contact-status').textContent = contato.status;
+
+    carregarMensagens(); // sua função que carrega mensagens do contato
     document.querySelector('.chat-container').classList.add('active');
 }
 
