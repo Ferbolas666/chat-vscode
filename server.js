@@ -740,6 +740,51 @@ app.post('/upload-imagem', upload.single('imagem'), async (req, res) => {
   }
 });
 
+app.post('/upload-audio', upload.single('audio'), async (req, res) => {
+    console.log("Recebi uma requisição de áudio!"); // ✅ deve aparecer no terminal do Node
+
+    try {
+        if (!req.file) {
+            console.log("Nenhum áudio enviado."); // ✅ terminal Node
+            return res.status(400).json({ error: 'Nenhum áudio enviado.' });
+        }
+
+        const { cod_usuario, cod_destinatario, usuario, mensagem } = req.body;
+        console.log("Dados do áudio:", cod_usuario, cod_destinatario, usuario, mensagem);
+
+        const audio = req.file.buffer;
+
+        const query = `
+          INSERT INTO chat_mensagens
+            (cod_usuario, cod_destinatario, usuario, mensagem, data_envio, arquivo, tipo_arquivo)
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5, 'AUDIO')
+            RETURNING data_envio
+        `;
+        const result = await pgPool.query(query, [
+            cod_usuario,
+            cod_destinatario,
+            usuario,
+            mensagem || '',
+            audio
+        ]);
+
+        console.log("Áudio salvo no banco! Data:", result.rows[0].data_envio);
+
+        io.emit("novo_audio", {
+            buffer: audio.toString("base64"),
+            usuario,
+            cod_usuario,
+            dest: cod_destinatario,
+            data_envio: result.rows[0].data_envio
+        });
+
+        res.status(200).json({ message: 'Áudio salvo e emitido em tempo real!' });
+    } catch (error) {
+        console.error('Erro ao salvar áudio:', error);
+        res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+});
+
 // Rota para o chat (proteção adicional)
 app.get('/chat.html', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'chat.html'));

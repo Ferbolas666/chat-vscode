@@ -686,6 +686,17 @@
   100% { transform: translateY(0px); }
 }
 
+#btn-audio.recording {
+  background-color: red;      /* botão fica vermelho enquanto grava */
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
 </style>
 </head>
 <body>
@@ -767,7 +778,7 @@
     </div>
 
     <!-- Input de mensagem -->
-    <div class="chat-input">
+     <div class="chat-input">
       <button id="btn-emoji">
         <i class="fas fa-smile"></i>
       </button>
@@ -775,10 +786,14 @@
         <i class="fas fa-paperclip"></i>
       </button>
       <input type="text" placeholder="Digite uma mensagem">
-      <button>
+      <!-- Novo botão de áudio -->
+       <button id="btn-audio">
+        <i class="fas fa-microphone"></i>
+       </button>
+       <button>
         <i class="fas fa-paper-plane"></i>
-      </button>
-    </div>
+       </button>
+     </div>
 
     <!-- Emoji picker -->
     <emoji-picker id="emoji-picker" style="position:absolute; bottom:60px; left:20px; display:none;"></emoji-picker>
@@ -841,6 +856,10 @@ socket.on('nova_imagem', (data) => {
     console.log('🖼️ IMAGEM RECEBIDA:', data);
 });
 
+// Escutar imagens
+socket.on('novo_audio', (data) => {
+    console.log('Espero que todos morram:', data);
+});
 // Para testar manualmente no console
 window.socket = socket;
 // Escuta novas mensagens de texto em tempo real
@@ -886,6 +905,21 @@ socket.on("nova_imagem", (msg) => {
             icon: "/img/chat-icon.png"
         });
     }
+});
+
+socket.on("novo_audio", (data) => {
+  const audioBlob = new Blob(
+    [Uint8Array.from(atob(data.buffer), c => c.charCodeAt(0))],
+    { type: 'audio/webm' } // ou audio/mp3 dependendo de como gravar
+  );
+
+  const audioUrl = URL.createObjectURL(audioBlob);
+
+  const audioElement = document.createElement("audio");
+  audioElement.controls = true;
+  audioElement.src = audioUrl;
+
+  document.querySelector("#chat-messages").appendChild(audioElement);
 });
 
 function renderizarMensagensIncremental(novasMensagens) {
@@ -1674,6 +1708,86 @@ imageInput.addEventListener('change', function(e) {
             console.error('Erro ao enviar imagem:', error);
         });
     }
+});
+
+let mediaRecorder;
+let audioChunks = [];
+const btnAudio = document.getElementById('btn-audio');
+
+btnAudio.addEventListener('click', async () => {
+  // 🔥 PASSO 1: Verifica se está gravando
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    //alert('🔥 PASSO 1: Parando gravação...');
+    mediaRecorder.stop();
+    btnAudio.classList.remove('recording');
+    return;
+  }
+
+  try {
+    //alert('🔥 PASSO 2: Pedindo permissão do microfone...');
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    //alert('🔥 PASSO 3: Microfone concedido! Criando MediaRecorder...');
+    
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = e => {
+      //alert('🔥 PASSO 4: Dados de áudio recebidos: ' + e.data.size + ' bytes');
+      audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+     // alert('🔥 PASSO 5: Gravação parada! Processando...');
+      
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      //alert('🔥 PASSO 6: Blob criado: ' + audioBlob.size + ' bytes');
+      
+      const audioFile = new File([audioBlob], "gravacao.webm", { type: "audio/webm" });
+      //alert('🔥 PASSO 7: File criado: ' + audioFile.size + ' bytes');
+
+      // 🔥 PASSO 8: Verifica se as variáveis existem
+      //alert('🔥 PASSO 8: Variáveis - codUsuario: ' + codUsuario + ', codDest: ' + codDest + ', usuario: ' + usuario);
+
+      // Prepara FormData
+      const formData = new FormData();
+      formData.append("audio", audioFile);
+      formData.append("cod_usuario", usuarioLogado.id);
+      formData.append("cod_destinatario", destino);
+      formData.append("usuario", usuarioLogado.nome);
+      formData.append("mensagem", "");
+
+      //alert('🔥 PASSO 9: FormData preparado! Enviando fetch...');
+
+      try {
+        //alert('🔥 PASSO 10: Tentando fetch para /upload-audio...');
+        
+        const response = await fetch("/upload-audio", {
+          method: "POST",
+          body: formData
+        });
+
+        //alert('🔥 PASSO 11: Resposta recebida! Status: ' + response.status);
+        
+        if (response.ok) {
+          const result = await response.json();
+         // alert('🔥 PASSO 12: ✅ Sucesso! Servidor respondeu: ' + JSON.stringify(result));
+        } else {
+       //   alert('🔥 PASSO 12: ❌ Erro HTTP: ' + response.status + ' - ' + response.statusText);
+        }
+
+      } catch (err) {
+     //   alert('🔥 PASSO 12: ❌ Erro de rede/fetch: ' + err.message);
+      }
+    };
+
+   // alert('🔥 PASSO 13: Iniciando gravação...');
+    mediaRecorder.start();
+    btnAudio.classList.add('recording');
+  //  alert('🔥 PASSO 14: Gravação iniciada! Agora grave e pare para testar.');
+
+  } catch (err) {
+    alert('🔥 ERRO GERAL: ' + err.message);
+  }
 });
 
 // Função para adicionar imagem ao chat
