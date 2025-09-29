@@ -285,14 +285,14 @@
     justify-content: center;
   }
   
-  .chat-messages {
+.chat-messages {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  overflow-y: auto;
-  flex: 1;            /* <<< faz ocupar o espaço todo */
-  max-height: none;   /* <<< remove a trava de altura */
+  overflow-y: auto;  /* ativa scroll quando precisa */
+  flex: 1;           /* ocupa o espaço que sobra */
+  max-height: none;  /* sem limite de altura */
 }
 
 /* Mensagem enviada pelo usuário logado */
@@ -373,6 +373,12 @@
   text-align: right;
 }
   
+.chat-box {
+  display: flex;
+  flex-direction: column; /* organiza em coluna */
+  height: 100%;           /* ocupa toda a altura disponível */
+}
+
 .chat-input {
   display: flex;
   padding: 12px;
@@ -380,11 +386,12 @@
   align-items: center;
   gap: 8px;
   border-top: 1px solid #e0e0e0;
+  flex-shrink: 0;  /* impede de ser "empurrado" pelo flex */
 }
 
 .chat-input input {
   flex: 1;
-  min-width: 0;              /* 🔑 evita estourar no mobile */
+  min-width: 0; /* evita quebrar no mobile */
   padding: 12px 16px;
   border: 1px solid #e0e0e0;
   border-radius: 25px;
@@ -397,7 +404,7 @@
 }
 
 .chat-input button {
-  width: 44px;               /* 🔑 mais confortável no celular */
+  width: 44px;
   height: 44px;
   border-radius: 50%;
   background-color: var(--primary-blue);
@@ -409,29 +416,31 @@
   justify-content: center;
   font-size: 18px;
   transition: background-color 0.2s;
-  flex-shrink: 0;             /* 🔑 impede que o botão diminua */
+  flex-shrink: 0; /* não diminui o botão */
 }
 
 .chat-input button:hover {
   background-color: var(--dark-blue);
 }
 
-/* Ajustes extras para telas muito pequenas */
 @media (max-width: 480px) {
   .chat-input {
     padding: 8px 10px;
     gap: 6px;
   }
+
   .chat-input input {
     padding: 10px 14px;
     font-size: 14px;
   }
+
   .chat-input button {
     width: 40px;
     height: 40px;
     font-size: 16px;
-    
   }
+}
+
 
   /* Faz o conteúdo ocupar a tela inteira e permitir rolagem */
   .app-content {
@@ -1520,13 +1529,37 @@ async function enviarMensagem() {
         
         if (response.ok) {
             input.value = "";
-            // Recarregar mensagens após enviar
+            
+            // 🔥 ENVIAR NOTIFICAÇÃO POR WHATSAPP
+            await enviarNotificacaoWhatsApp(message, destino);
+            
             await carregarMensagens();
-        } else {
-            console.error('Erro ao enviar mensagem');
         }
     } catch (error) {
         console.error('Erro ao enviar mensagem:', error);
+    }
+}
+
+// Função para enviar notificação via WhatsApp
+async function enviarNotificacaoWhatsApp(mensagem, destinatarioId) {
+    try {
+        // Primeiro, busca o número do destinatário no banco
+        const response = await fetch(`/api/buscar-contato/${destinatarioId}`);
+        const contato = await response.json();
+        
+        if (contato.telefone) {
+            // Envia para seu backend que integra com WhatsApp
+            await fetch('/api/enviar-whatsapp', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    telefone: contato.telefone,
+                    mensagem: `Nova mensagem de ${usuarioLogado.nome}: ${mensagem}`
+                })
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao enviar WhatsApp:', error);
     }
 }
 
